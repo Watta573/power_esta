@@ -1,4 +1,4 @@
-# Power Esta - Library Management System
+# Power Esta, SIGB (Système Intégré de Gestion de Bibliothèque).
 
 Architecture et déploiement d'un écosystème numérique complexe dédié à la gestion de bibliothèque, optimisé par un stack Spring Boot / React et PostgreSQL. La solution intègre des fonctionnalités de notifications en temps réel et une gestion granulaire des accès adaptée à cinq profils d'utilisateurs distincts.
 
