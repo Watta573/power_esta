@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Réservations</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<main class="container py-4">
+  <div th:if="${success}" class="alert alert-success" th:text="${success}">Succès</div>
+  <h1 class="h4 mb-3">Toutes les réservations</h1>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <table class="table table-striped mb-0">
+        <thead>
+        <tr>
+          <th>ID</th>
+          <th>Utilisateur</th>
+          <th>Livre</th>
+          <th>Statut</th>
+          <th>Position</th>
+          <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${reservations}">
+          <td th:text="${r.id}">1</td>
+          <td th:text="${r.utilisateur.email}">mail</td>
+          <td th:text="${r.livre.titre}">livre</td>
+          <td th:text="${r.statut}">EN_ATTENTE</td>
+          <td th:text="${r.position}">1</td>
+          <td class="text-end">
+            <form th:if="${r.statut.name() == 'DISPONIBLE'}"
+                  th:action="@{'/admin/reservations/' + ${r.id} + '/confirmer'}" method="post" class="d-inline">
+              <input type="hidden" name="_method" value="put"/>
+              <button class="btn btn-sm btn-outline-success" type="submit">Confirmer</button>
+            </form>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(reservations)}">
+          <td colspan="6" class="text-center text-muted py-3">Aucune réservation.</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+</body>
+</html>
+

@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #1b4332;
+  --color-primary-light: #2d6a4f;
+  --color-primary-pale: #d8f3dc;
+  --color-accent: #e9c46a;
+  --color-accent-dark: #c9a227;
+  --color-surface: #fafaf8;
+  --color-surface-2: #f2f0eb;
+  --color-surface-3: #e8e5de;
+  --color-border: #d4cfc6;
+  --color-text-1: #1a1a18;
+  --color-text-2: #4a4a45;
+  --color-text-3: #8a8a82;
+  --color-success: #2d6a4f;
+  --color-warning: #e9c46a;
+  --color-danger: #e63946;
+  --color-info: #457b9d;
+  --sidebar-from: #1b4332;
+  --sidebar-mid: #0d2b1f;
+  --sidebar-to: #081a13;
+  --sidebar-width: 260px;
+  --header-height: 60px;
+  --radius: 10px;
+}
+
+.dark {
+  --color-surface: #171714;
+  --color-surface-2: #1f1f1b;
+  --color-surface-3: #2b2b25;
+  --color-border: #3d3d36;
+  --color-text-1: #f4f4ef;
+  --color-text-2: #d4d4cc;
+  --color-text-3: #9e9e95;
+}
+
+/* Transition globale lors du changement de template/thème */
+*, *::before, *::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease;
+}
+
+/* Exclure les animations framer-motion des transitions globales */
+[data-framer-motion], .framer-motion {
+  transition: none !important;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-surface text-text-1 font-sans antialiased;
+}
+
+/* Scrollbar sidebar */
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* Transition de page */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

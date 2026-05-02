@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+backend/target/
+bibliotheque-app/node_modules/
+bibliotheque-app/dist/
+bibliotheque-app/dist-ssr/
+bibliotheque-app/src-tauri/target/
+
+# Environment and Secrets
+.env
+*.local
+backend/.env
+bibliotheque-app/.env
+token.json
+
+# Logs
+*.log
+backend/*.log
+backend/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project specific
+backend/uploads/
+backend/target/

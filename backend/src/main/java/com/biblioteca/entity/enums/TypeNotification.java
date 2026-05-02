@@ -1,0 +1,15 @@
+package com.biblioteca.entity.enums;
+
+public enum TypeNotification {
+  RAPPEL_RETOUR,
+  LIVRE_DISPONIBLE,
+  RETARD_CONSTATE,
+  AMENDE_GENEREE,
+  COMPTE_CREE,
+  EMPRUNT_CREE,
+  RETOUR_CONFIRME,
+  RESERVATION_CREEE,
+  NOUVEAU_LIVRE,
+  RESERVATION_EXPIREE
+}
+
