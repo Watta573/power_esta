@@ -5,6 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBookOpen, faLayerGroup, faClipboardList, faTriangleExclamation,
   faCircleExclamation, faBookmark, faCoins, faCheckCircle, faRotateRight,
+  faIdCard, faCalendarCheck, faCalendarXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   Area, AreaChart, CartesianGrid, Cell, Pie, PieChart,
@@ -260,7 +261,7 @@ function DashboardMembre() {
         <div className="rounded-xl border border-border bg-white p-5 shadow-soft">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100">
-              <FontAwesomeIcon icon={faBookmark} className="text-purple-600" style={{ fontSize: 18 }} />
+              <FontAwesomeIcon icon={faCalendarCheck} className="text-purple-600" style={{ fontSize: 18 }} />
             </div>
             <div>
               <p className="text-xs text-text-2">{t.dashboard.reservationsActives}</p>
@@ -349,7 +350,7 @@ function DashboardMembre() {
               {(reservations?.content ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-4 py-8 text-center text-text-3">
-                    <FontAwesomeIcon icon={faBookmark} className="mb-1 text-text-3" style={{ fontSize: 20 }} />
+                    <FontAwesomeIcon icon={faCalendarXmark} className="mb-1 text-text-3" style={{ fontSize: 20 }} />
                     <p>{t.dashboard.aucuneReservation}</p>
                   </td>
                 </tr>
@@ -382,10 +383,13 @@ function DashboardMembre() {
             <FontAwesomeIcon icon={faClipboardList} style={{ fontSize: 13 }} /> {t.dashboard.mesEmprunts}
           </Link>
           <Link to="/reservations" className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-text-2 hover:bg-surface">
-            <FontAwesomeIcon icon={faBookmark} style={{ fontSize: 13 }} /> {t.dashboard.mesReservations}
+            <FontAwesomeIcon icon={faCalendarCheck} style={{ fontSize: 13 }} /> {t.dashboard.mesReservations}
           </Link>
           <Link to="/communication" className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-text-2 hover:bg-surface">
             <FontAwesomeIcon icon={faCoins} style={{ fontSize: 13 }} /> {t.communication.titre}
+          </Link>
+          <Link to="/espace-membre" className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-text-2 hover:bg-surface">
+            <FontAwesomeIcon icon={faIdCard} style={{ fontSize: 13 }} /> {(t as any).espaceMembre?.titre ?? "Mon espace"}
           </Link>
         </div>
       </div>

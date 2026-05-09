@@ -110,6 +110,12 @@ public class ReservationApiController {
     return toDto(reservationService.relancer(id));
   }
 
+  @PostMapping("/verifier-expiration")
+  @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE','ETUDIANT','ENSEIGNANT','PUBLIC')")
+  public void verifierExpiration() {
+    reservationService.verifierExpiration();
+  }
+
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE')")
   public void supprimer(@PathVariable Long id) {

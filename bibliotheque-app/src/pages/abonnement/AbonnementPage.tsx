@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus, faXmark, faChevronRight,
   faCircleCheck, faHourglassHalf, faTriangleExclamation,
-  faDollarSign, faCalendarCheck, faUsers,
+  faCalendarCheck, faUsers, faEye, faDownload, faSearch, faRotateRight,
+  faMobileScreen, faStore, faSpinner, faExternalLink,
 } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "sonner";
-import { abonnementsApi, type FormulaAbonnement, type DemandeEnAttente } from "@/api/abonnements.api";
+import { abonnementsApi, type FormulaAbonnement, type DemandeEnAttente, type CotisationListItem } from "@/api/abonnements.api";
 import { useAuthStore } from "@/stores/auth.store";
 import { useEmprunts } from "@/hooks/useEmprunts";
 import StatusBadge from "@/components/shared/StatusBadge";
+import Pagination from "@/components/shared/Pagination";
 
 // ─── Barre de progression abonnement ─────────────────────────────────────
 
@@ -39,19 +41,129 @@ function ProgressionAbonnement({ joursRestants, dureeMois }: { joursRestants: nu
 
 // ─── Modal souscription ───────────────────────────────────────────────────
 
-function SouscrireModal({ formules, onClose }: { formules: FormulaAbonnement[]; onClose: () => void }) {
+type ModePaiement = "PRESENTIEL" | "CINETPAY";
+
+// Étape de suivi paiement CinetPay
+function CinetPaySuivi({
+  transactionId, onSuccess, onCancel,
+}: { transactionId: string; onSuccess: () => void; onCancel: () => void }) {
+  const [checking, setChecking] = useState(false);
+  const [statut, setStatut] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Polling automatique toutes les 5s
+  useEffect(() => {
+    intervalRef.current = setInterval(async () => {
+      try {
+        const res = await abonnementsApi.verifierPaiement(transactionId);
+        if (res.data.statut === "ACTIVE") {
+          clearInterval(intervalRef.current!);
+          setStatut("ACTIVE");
+          onSuccess();
+        }
+      } catch { /* silencieux */ }
+    }, 5000);
+    return () => clearInterval(intervalRef.current!);
+  }, [transactionId]);
+
+  async function verifierManuellement() {
+    setChecking(true);
+    try {
+      const res = await abonnementsApi.verifierPaiement(transactionId);
+      setStatut(res.data.statut);
+      if (res.data.statut === "ACTIVE") {
+        clearInterval(intervalRef.current!);
+        onSuccess();
+      } else {
+        toast.info("Paiement pas encore confirmé — " + (res.data.message ?? ""));
+      }
+    } catch {
+      toast.error("Erreur lors de la vérification");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="p-6 space-y-5">
+      <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-4 text-center space-y-2">
+        <FontAwesomeIcon icon={faMobileScreen} className="text-primary" style={{ fontSize: 32 }} />
+        <p className="font-semibold text-text-1">Paiement Mobile Money en cours</p>
+        <p className="text-xs text-text-3">Complétez le paiement dans la fenêtre CinetPay, puis revenez ici.</p>
+        <div className="flex items-center justify-center gap-2 text-xs text-text-2">
+          <FontAwesomeIcon icon={faSpinner} className="animate-spin" style={{ fontSize: 11 }} />
+          Vérification automatique en cours...
+        </div>
+      </div>
+      {statut === "ACTIVE" && (
+        <div className="rounded-xl border border-success/30 bg-success/5 p-3 text-center">
+          <FontAwesomeIcon icon={faCircleCheck} className="text-success" style={{ fontSize: 20 }} />
+          <p className="font-semibold text-success mt-1">Paiement confirmé ! Abonnement activé.</p>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button
+          onClick={verifierManuellement}
+          disabled={checking || statut === "ACTIVE"}
+          className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-medium text-white hover:bg-primary-light disabled:opacity-50"
+        >
+          {checking ? <FontAwesomeIcon icon={faSpinner} className="animate-spin" style={{ fontSize: 12 }} /> : <FontAwesomeIcon icon={faCircleCheck} style={{ fontSize: 12 }} />}
+          Vérifier le paiement
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={statut === "ACTIVE"}
+          className="rounded-lg border border-border px-4 py-2 text-sm text-text-2 hover:bg-surface disabled:opacity-50"
+        >
+          Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SouscrireModal({
+  formules, onClose, renouveler = false,
+}: {
+  formules: FormulaAbonnement[];
+  onClose: () => void;
+  renouveler?: boolean;
+}) {
   const [selected, setSelected] = useState<FormulaAbonnement | null>(null);
+  const [mode, setMode] = useState<ModePaiement | null>(null);
+  const [cinetpayUrl, setCinetpayUrl] = useState<string | null>(null);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const souscrireMutation = useMutation({
-    mutationFn: (formulaId: number) => abonnementsApi.souscrire(formulaId),
+    mutationFn: (formulaId: number) =>
+      renouveler ? abonnementsApi.renouveler(formulaId) : abonnementsApi.souscrire(formulaId),
     onSuccess: () => {
       toast.success("Demande soumise. Rendez-vous à la bibliothèque pour le paiement.");
       queryClient.invalidateQueries({ queryKey: ["mon-abonnement"] });
+      queryClient.invalidateQueries({ queryKey: ["my-cotisations"] });
       onClose();
     },
     onError: (err: any) => toast.error(err?.response?.data?.message ?? "Erreur lors de la souscription"),
   });
+
+  const cinetpayMutation = useMutation({
+    mutationFn: (formulaId: number) =>
+      abonnementsApi.initierPaiementCinetPay(formulaId, renouveler),
+    onSuccess: (res) => {
+      setCinetpayUrl(res.data.paymentUrl);
+      setTransactionId(res.data.transactionId);
+      window.open(res.data.paymentUrl, "_blank", "noopener,noreferrer");
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? "Erreur CinetPay"),
+  });
+
+  function handleCinetPaySuccess() {
+    toast.success("Paiement confirmé ! Votre abonnement est maintenant actif.");
+    queryClient.invalidateQueries({ queryKey: ["mon-abonnement"] });
+    queryClient.invalidateQueries({ queryKey: ["my-cotisations"] });
+    onClose();
+  }
 
   const PLAN_COLORS: Record<string, string> = {
     blue: "border-blue-200 bg-blue-50",
@@ -59,6 +171,8 @@ function SouscrireModal({ formules, onClose }: { formules: FormulaAbonnement[]; 
     purple: "border-purple-200 bg-purple-50",
     gold: "border-amber-300 bg-amber-50",
   };
+
+  const titre = renouveler ? "Renouveler l'abonnement" : "Choisir une formule";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
@@ -77,7 +191,7 @@ function SouscrireModal({ formules, onClose }: { formules: FormulaAbonnement[]; 
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-white/50">Abonnement</p>
-              <h2 className="mt-0.5 text-lg font-bold text-white">Choisir une formule</h2>
+              <h2 className="mt-0.5 text-lg font-bold text-white">{titre}</h2>
             </div>
             <button
               onClick={onClose}
@@ -88,87 +202,360 @@ function SouscrireModal({ formules, onClose }: { formules: FormulaAbonnement[]; 
           </div>
         </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-3">
-          {formules.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setSelected(selected?.id === f.id ? null : f)}
-              className={`w-full rounded-xl border-2 p-4 text-left transition-all ${
-                selected?.id === f.id
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : `${PLAN_COLORS[f.couleur] ?? "border-border bg-surface"} hover:border-primary/40`
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-text-1">{f.nom}</p>
-                  <p className="text-xs text-text-3 mt-0.5">{f.description}</p>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-text-2">
-                    <span className="flex items-center gap-1">
-                      <FontAwesomeIcon icon={faCalendarCheck} style={{ fontSize: 10 }} />
-                      {f.dureeMois} mois
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <FontAwesomeIcon icon={faUsers} style={{ fontSize: 10 }} />
-                      {f.maxEmpruntsSimultanes} emprunt{f.maxEmpruntsSimultanes > 1 ? "s" : ""} simultané{f.maxEmpruntsSimultanes > 1 ? "s" : ""}
-                    </span>
+        {/* Suivi CinetPay */}
+        {transactionId && (
+          <CinetPaySuivi
+            transactionId={transactionId}
+            onSuccess={handleCinetPaySuccess}
+            onCancel={() => { setTransactionId(null); setCinetpayUrl(null); setMode(null); }}
+          />
+        )}
+
+        {/* Sélection formule + mode */}
+        {!transactionId && (
+          <>
+            {/* Body — formules */}
+            <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+              {formules.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setSelected(selected?.id === f.id ? null : f)}
+                  className={`w-full rounded-xl border-2 p-4 text-left transition-all ${
+                    selected?.id === f.id
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : `${PLAN_COLORS[f.couleur] ?? "border-border bg-surface"} hover:border-primary/40`
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-text-1">{f.nom}</p>
+                      <p className="text-xs text-text-3 mt-0.5">{f.description}</p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-text-2">
+                        <span className="flex items-center gap-1">
+                          <FontAwesomeIcon icon={faCalendarCheck} style={{ fontSize: 10 }} />
+                          {f.dureeMois} mois
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <FontAwesomeIcon icon={faUsers} style={{ fontSize: 10 }} />
+                          {f.maxEmpruntsSimultanes} emprunt{f.maxEmpruntsSimultanes > 1 ? "s" : ""} simultané{f.maxEmpruntsSimultanes > 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 ml-4">
+                      <p className="text-xl font-bold text-text-1">{f.prix.toLocaleString("fr-FR")}</p>
+                      <p className="text-xs text-text-3">FCFA</p>
+                      {f.couleur === "gold" && (
+                        <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          Meilleure valeur
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right shrink-0 ml-4">
-                  <p className="text-xl font-bold text-text-1">{f.prix.toLocaleString("fr-FR")}</p>
-                  <p className="text-xs text-text-3">FCFA</p>
-                  {f.couleur === "gold" && (
-                    <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                      Meilleure valeur
-                    </span>
-                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Choix mode de paiement */}
+            {selected && (
+              <div className="px-6 pb-2 space-y-2">
+                <p className="text-xs font-semibold text-text-2 uppercase tracking-wide">Mode de paiement</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setMode("CINETPAY")}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all ${
+                      mode === "CINETPAY" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={faMobileScreen} className="text-primary" style={{ fontSize: 20 }} />
+                    <p className="text-xs font-semibold text-text-1">Mobile Money</p>
+                    <p className="text-[10px] text-text-3 text-center">Moov · Orange · Wave</p>
+                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success">Immédiat</span>
+                  </button>
+                  <button
+                    onClick={() => setMode("PRESENTIEL")}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all ${
+                      mode === "PRESENTIEL" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={faStore} className="text-text-2" style={{ fontSize: 20 }} />
+                    <p className="text-xs font-semibold text-text-1">En présentiel</p>
+                    <p className="text-[10px] text-text-3 text-center">Paiement au guichet</p>
+                    <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">Validation manuelle</span>
+                  </button>
                 </div>
               </div>
-              {selected?.id === f.id && (
-                <div className="mt-3 pt-3 border-t border-primary/20">
-                  <p className="text-xs text-text-2">
-                    Prix / mois : <strong>{Math.round(f.prix / f.dureeMois).toLocaleString("fr-FR")} FCFA</strong>
-                    {" · "}Catalogue complet · Réservations incluses
-                  </p>
-                </div>
-              )}
-            </button>
-          ))}
-
-          <p className="text-xs text-text-3 text-center pt-1">
-            Paiement en présentiel à la bibliothèque · Reçu envoyé par email après validation
-          </p>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-border px-6 py-4">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm text-text-2 transition hover:bg-surface"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={() => selected && souscrireMutation.mutate(selected.id)}
-            disabled={!selected || souscrireMutation.isPending}
-            className="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-40"
-            style={{ background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-light))" }}
-          >
-            {souscrireMutation.isPending ? (
-              <span className="flex items-center gap-2">
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                Envoi...
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5">
-                <FontAwesomeIcon icon={faCircleCheck} style={{ fontSize: 12 }} />
-                Soumettre la demande
-              </span>
             )}
-          </button>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between border-t border-border px-6 py-4">
+              <button
+                onClick={onClose}
+                className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm text-text-2 transition hover:bg-surface"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  if (!selected || !mode) return;
+                  if (mode === "PRESENTIEL") souscrireMutation.mutate(selected.id);
+                  else cinetpayMutation.mutate(selected.id);
+                }}
+                disabled={!selected || !mode || souscrireMutation.isPending || cinetpayMutation.isPending}
+                className="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-40"
+                style={{ background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-light))" }}
+              >
+                {(souscrireMutation.isPending || cinetpayMutation.isPending) ? (
+                  <span className="flex items-center gap-2">
+                    <FontAwesomeIcon icon={faSpinner} className="animate-spin" style={{ fontSize: 12 }} />
+                    {cinetpayMutation.isPending ? "Connexion CinetPay..." : "Envoi..."}
+                  </span>
+                ) : mode === "CINETPAY" ? (
+                  <span className="flex items-center gap-1.5">
+                    <FontAwesomeIcon icon={faExternalLink} style={{ fontSize: 12 }} />
+                    Payer via CinetPay
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <FontAwesomeIcon icon={faCircleCheck} style={{ fontSize: 12 }} />
+                    Soumettre la demande
+                  </span>
+                )}
+              </button>
+            </div>
+          </>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+// ─── Détail modal cotisation ──────────────────────────────────────────────
+
+function DetailModal({ item, onClose }: { item: CotisationListItem; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 12 }}
+        transition={{ duration: 0.18 }}
+        className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden"
+      >
+        <div
+          className="relative px-6 pb-4 pt-5"
+          style={{ background: "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%)" }}
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-white/50">Détail</p>
+              <h2 className="mt-0.5 text-lg font-bold text-white">Abonnement #{item.id}</h2>
+            </div>
+            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white">
+              <FontAwesomeIcon icon={faXmark} style={{ fontSize: 14 }} />
+            </button>
+          </div>
+        </div>
+        <div className="p-6 grid grid-cols-2 gap-4 text-sm">
+          {[
+            ["Adhérent", item.utilisateur],
+            ["Email", item.email],
+            ["Identifiant", item.identifiant],
+            ["Formule", item.formule],
+            ["Montant", `${item.montant.toLocaleString("fr-FR")} FCFA`],
+            ["Code réservation", item.codeReservation],
+            ["Début", item.dateDebut],
+            ["Fin", item.dateFin],
+            ["Paiement", item.datePaiement ?? "—"],
+            ["Statut", item.statut],
+          ].map(([label, val]) => (
+            <div key={label}>
+              <p className="text-xs text-text-3">{label}</p>
+              <p className="font-medium text-text-1 break-all">{val}</p>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-border px-6 py-4 flex justify-end">
+          <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm text-text-2 hover:bg-surface">Fermer</button>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+// ─── Tableau abonnements générique ───────────────────────────────────────────
+
+function AbonnementsTable({
+  isAdmin,
+  formules,
+}: {
+  isAdmin: boolean;
+  formules: FormulaAbonnement[];
+}) {
+  const [search, setSearch] = useState("");
+  const [statut, setStatut] = useState("");
+  const [formule, setFormule] = useState("");
+  const [page, setPage] = useState(0);
+  const [detail, setDetail] = useState<CotisationListItem | null>(null);
+  const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
+  const queryClient = useQueryClient();
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [renewTarget, setRenewTarget] = useState<CotisationListItem | null>(null);
+
+  const params = { page, size: 10, search: search || undefined, statut: statut || undefined, formule: formule || undefined };
+
+  const { data } = useQuery({
+    queryKey: isAdmin ? ["cotisations", params] : ["my-cotisations", params],
+    queryFn: () => isAdmin
+      ? abonnementsApi.getTous(params).then((r) => r.data)
+      : abonnementsApi.getMesAbonnements(params).then((r) => r.data),
+  });
+
+  async function handleExport(type: "pdf" | "excel") {
+    setExporting(type);
+    try {
+      const exportParams = { search: search || undefined, statut: statut || undefined, formule: formule || undefined };
+      const res = isAdmin
+        ? await (type === "pdf" ? abonnementsApi.exportPdf(exportParams) : abonnementsApi.exportExcel(exportParams))
+        : await (type === "pdf" ? abonnementsApi.exportMesPdf(exportParams) : abonnementsApi.exportMesExcel(exportParams));
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `abonnements.${type === "pdf" ? "pdf" : "xlsx"}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Erreur lors de l'export");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  const items = data?.content ?? [];
+  const totalPages = data?.totalPages ?? 1;
+
+  return (
+    <div className="space-y-4">
+      {/* Filtres */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[180px]">
+          <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-3" style={{ fontSize: 12 }} />
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            placeholder="Rechercher adhérent, email, code..."
+            className="w-full rounded-lg border border-border pl-8 pr-3 py-2 text-sm focus:border-primary focus:outline-none"
+          />
+        </div>
+        <select
+          value={statut}
+          onChange={(e) => { setStatut(e.target.value); setPage(0); }}
+          className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="">Tous les statuts</option>
+          <option value="EN_ATTENTE">En attente</option>
+          <option value="ACTIVE">Actif</option>
+          <option value="EXPIREE">Expiré</option>
+          <option value="REJETEE">Rejeté</option>
+        </select>
+        <select
+          value={formule}
+          onChange={(e) => { setFormule(e.target.value); setPage(0); }}
+          className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="">Toutes les formules</option>
+          {formules.map((f) => <option key={f.id} value={f.nom}>{f.nom}</option>)}
+        </select>
+        <div className="flex gap-2 ml-auto">
+          <button
+            onClick={() => handleExport("pdf")}
+            disabled={exporting !== null}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-white hover:bg-primary-light disabled:opacity-50"
+          >
+            <FontAwesomeIcon icon={faDownload} style={{ fontSize: 11 }} />
+            {exporting === "pdf" ? "Export..." : "PDF"}
+          </button>
+          <button
+            onClick={() => handleExport("excel")}
+            disabled={exporting !== null}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-text-2 hover:bg-surface disabled:opacity-50"
+          >
+            <FontAwesomeIcon icon={faDownload} style={{ fontSize: 11 }} />
+            {exporting === "excel" ? "Export..." : "Excel"}
+          </button>
+        </div>
+      </div>
+
+      {/* Tableau */}
+      <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-2 text-text-2">
+            <tr>
+              {["Code", "Adhérent", "Formule", "Montant", "Début", "Fin", "Statut", ""].map((h) => (
+                <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {items.length === 0 ? (
+              <tr><td colSpan={8} className="px-4 py-10 text-center text-text-3">Aucun abonnement trouvé</td></tr>
+            ) : items.map((item) => (
+              <tr key={item.id} className="hover:bg-surface">
+                <td className="px-4 py-3 font-mono text-xs text-text-2">{item.codeReservation}</td>
+                <td className="px-4 py-3">
+                  <p className="font-medium text-text-1">{item.utilisateur}</p>
+                  <p className="text-xs text-text-3">{item.email}</p>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{item.formule}</span>
+                </td>
+                <td className="px-4 py-3 font-semibold text-text-1">{item.montant.toLocaleString("fr-FR")} FCFA</td>
+                <td className="px-4 py-3 text-text-2 text-xs">{item.dateDebut}</td>
+                <td className="px-4 py-3 text-text-2 text-xs">{item.dateFin}</td>
+                <td className="px-4 py-3"><StatusBadge statut={item.statut} /></td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setDetail(item)}
+                      className="rounded border border-border px-2 py-1 text-xs text-text-2 hover:bg-surface"
+                      title="Voir détails"
+                    >
+                      <FontAwesomeIcon icon={faEye} style={{ fontSize: 11 }} />
+                    </button>
+                    {!isAdmin && (item.statut === "ACTIVE" || item.statut === "EXPIREE") && (
+                      <button
+                        onClick={() => { setRenewTarget(item); setShowRenewModal(true); }}
+                        className="rounded border border-primary px-2 py-1 text-xs text-primary hover:bg-primary/10"
+                        title="Renouveler"
+                      >
+                        <FontAwesomeIcon icon={faRotateRight} style={{ fontSize: 11 }} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="border-t border-border px-4 py-3">
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      </div>
+
+      {/* Modal détail */}
+      <AnimatePresence>
+        {detail && <DetailModal item={detail} onClose={() => setDetail(null)} />}
+      </AnimatePresence>
+
+      {/* Modal renouvellement */}
+      <AnimatePresence>
+        {showRenewModal && renewTarget && (
+          <SouscrireModal
+            formules={formules}
+            renouveler={true}
+            onClose={() => { setShowRenewModal(false); setRenewTarget(null); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -178,7 +565,7 @@ function SouscrireModal({ formules, onClose }: { formules: FormulaAbonnement[]; 
 export default function AbonnementPage() {
   const queryClient = useQueryClient();
   const canManage = useAuthStore((s) => s.hasRole(["ADMIN", "BIBLIOTHECAIRE"]));
-  const [tab, setTab] = useState<"amendes" | "abonnement" | "attente">("amendes");
+  const [tab, setTab] = useState<"amendes" | "abonnement" | "attente" | "tous" | "mes-abonnements">("amendes");
   const [showModal, setShowModal] = useState(false);
 
   const { data: formules = [] } = useQuery({
@@ -269,7 +656,13 @@ export default function AbonnementPage() {
   const TABS = [
     { key: "amendes",     label: "Amendes en cours" },
     { key: "abonnement",  label: "Mon abonnement" },
-    ...(canManage ? [{ key: "attente", label: `Demandes en attente${(enAttente as DemandeEnAttente[]).length > 0 ? ` (${(enAttente as DemandeEnAttente[]).length})` : ""}` }] : []),
+    ...(canManage
+      ? [
+          { key: "tous", label: "Tous les abonnements" },
+          { key: "attente", label: `Demandes en attente${(enAttente as DemandeEnAttente[]).length > 0 ? ` (${(enAttente as DemandeEnAttente[]).length})` : ""}` },
+        ]
+      : [{ key: "mes-abonnements", label: "Mes abonnements" }]
+    ),
   ];
 
   return (
@@ -599,6 +992,16 @@ export default function AbonnementPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* ── Onglet Tous les abonnements (admin/biblio) ── */}
+      {canManage && tab === "tous" && (
+        <AbonnementsTable isAdmin={true} formules={formules as FormulaAbonnement[]} />
+      )}
+
+      {/* ── Onglet Mes abonnements (membres) ── */}
+      {!canManage && tab === "mes-abonnements" && (
+        <AbonnementsTable isAdmin={false} formules={formules as FormulaAbonnement[]} />
       )}
 
       {/* Modal souscription */}

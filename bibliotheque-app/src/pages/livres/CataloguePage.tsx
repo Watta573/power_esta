@@ -1,5 +1,5 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBookOpen, faFilter, faTableCellsLarge, faList, faPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faBookOpen, faFilter, faTableCellsLarge, faList, faPlus, faXmark, faHeart } from "@fortawesome/free-solid-svg-icons";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,6 +15,7 @@ import { useT } from "@/stores/i18n.store";
 import { reservationsApi } from "@/api/reservations.api";
 import { languesApi } from "@/api/langues.api";
 import { couvertureUrl } from "@/lib/imageUrl";
+import { useWishlist, useToggleWishlist } from "@/hooks/useEspaceMembre";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { Livre } from "@/types";
 
@@ -33,9 +34,13 @@ export default function CataloguePage() {
   const hasRole = useAuthStore((state) => state.hasRole);
   const utilisateur = useAuthStore((state) => state.utilisateur);
   const canManage = hasRole(["ADMIN", "BIBLIOTHECAIRE"]);
+  const canWishlist = hasRole(["ETUDIANT", "ENSEIGNANT", "PUBLIC"]);
   const navigate = useNavigate();
   const t = useT();
   const queryClient = useQueryClient();
+  const toggleWishlist = useToggleWishlist();
+  const { data: wishlistData } = useWishlist(canWishlist ? utilisateur?.id : undefined);
+  const wishlistIds = new Set((wishlistData ?? []).map((w) => w.livre.id));
 
   function resetFiltres() {
     setLangue(""); setCategorieId(undefined); setAuteur("");
@@ -243,6 +248,18 @@ export default function CataloguePage() {
                           className="rounded-md bg-primary px-3 py-1 text-sm text-white disabled:opacity-60"
                         >
                           {livre.nombreDisponibles > 0 ? t.livres.emprunter : t.livres.reserver}
+                        </button>
+                      )}
+                      {canWishlist && utilisateur && (
+                        <button
+                          onClick={() => toggleWishlist.mutate({ livreId: livre.id, utilisateurId: utilisateur.id, inWishlist: wishlistIds.has(livre.id) })}
+                          disabled={toggleWishlist.isPending}
+                          title={wishlistIds.has(livre.id) ? "Retirer de la wishlist" : "Ajouter à la wishlist"}
+                          className={`rounded-md border px-2 py-1 text-sm transition-colors disabled:opacity-50 ${
+                            wishlistIds.has(livre.id) ? "border-red-300 bg-red-50 text-red-500" : "border-border text-text-3 hover:text-red-400"
+                          }`}
+                        >
+                          <FontAwesomeIcon icon={faHeart} style={{ fontSize: 13 }} />
                         </button>
                       )}
                     </div>

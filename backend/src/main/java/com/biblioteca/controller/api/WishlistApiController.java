@@ -3,11 +3,15 @@ package com.biblioteca.controller.api;
 import com.biblioteca.entity.Livre;
 import com.biblioteca.entity.Utilisateur;
 import com.biblioteca.entity.WishlistItem;
+import com.biblioteca.exception.BusinessException;
 import com.biblioteca.repository.LivreRepository;
 import com.biblioteca.repository.UtilisateurRepository;
 import com.biblioteca.repository.WishlistItemRepository;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,9 +34,23 @@ public class WishlistApiController {
     this.utilisateurRepo = utilisateurRepo;
   }
 
+  // ── DTOs ────────────────────────────────────────────────────────────────
+
+  public record LivreWishlistDto(
+      Long id, String titre, String auteur, String couverture, int nombreDisponibles) {}
+
+  public record WishlistItemDto(
+      Long id, LivreWishlistDto livre, LocalDateTime dateAjout) {}
+
+  // ── Endpoints ───────────────────────────────────────────────────────────
+
   @GetMapping
-  public List<WishlistItem> getMaWishlist(@RequestParam Long utilisateurId) {
-    return wishlistRepo.findByUtilisateurIdOrderByDateAjoutDesc(utilisateurId);
+  @Transactional(readOnly = true)
+  public List<WishlistItemDto> getMaWishlist(@RequestParam Long utilisateurId) {
+    return wishlistRepo.findByUtilisateurIdOrderByDateAjoutDesc(utilisateurId)
+        .stream()
+        .map(this::toDto)
+        .toList();
   }
 
   @GetMapping("/check")
@@ -47,9 +65,9 @@ public class WishlistApiController {
       return Map.of("status", "already_exists", "inWishlist", true);
 
     Utilisateur u = utilisateurRepo.findById(utilisateurId)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Utilisateur introuvable"));
+        .orElseThrow(() -> new BusinessException("Utilisateur introuvable"));
     Livre l = livreRepo.findById(livreId)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Livre introuvable"));
+        .orElseThrow(() -> new BusinessException("Livre introuvable"));
 
     wishlistRepo.save(WishlistItem.builder().utilisateur(u).livre(l).build());
     return Map.of("status", "added", "inWishlist", true);
@@ -60,5 +78,15 @@ public class WishlistApiController {
   public Map<String, Object> retirer(@PathVariable Long livreId, @RequestParam Long utilisateurId) {
     wishlistRepo.deleteByUtilisateurIdAndLivreId(utilisateurId, livreId);
     return Map.of("status", "removed", "inWishlist", false);
+  }
+
+  // ── Mapping ─────────────────────────────────────────────────────────────
+
+  private WishlistItemDto toDto(WishlistItem item) {
+    Livre l = item.getLivre();
+    int disponibles = livreRepo.countDisponiblesByLivreId(l.getId());
+    LivreWishlistDto livreDto = new LivreWishlistDto(
+        l.getId(), l.getTitre(), l.getAuteur(), l.getCouverture(), disponibles);
+    return new WishlistItemDto(item.getId(), livreDto, item.getDateAjout());
   }
 }

@@ -14,7 +14,9 @@ export function useNotificationsCount(utilisateurId: number | undefined) {
     queryKey: ["notifications-count", utilisateurId],
     queryFn: () => notificationsApi.count(utilisateurId!).then((r) => r.data.count),
     enabled: !!utilisateurId,
-    refetchInterval: 30000,
+    refetchInterval: (query) => (query.state.status === "error" ? false : 30_000),
+    staleTime: 0,
+    retry: 2,
   });
 }
 

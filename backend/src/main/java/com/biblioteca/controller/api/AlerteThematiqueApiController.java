@@ -2,10 +2,14 @@ package com.biblioteca.controller.api;
 
 import com.biblioteca.entity.AlerteThematique;
 import com.biblioteca.entity.Utilisateur;
+import com.biblioteca.exception.BusinessException;
 import com.biblioteca.repository.AlerteThematiqueRepository;
 import com.biblioteca.repository.UtilisateurRepository;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,25 +31,33 @@ public class AlerteThematiqueApiController {
 
   public record AlerteRequest(String typeAlerte, String valeur) {}
 
+  public record AlerteDto(Long id, String typeAlerte, String valeur, LocalDateTime dateCreation) {}
+
   @GetMapping
-  public List<AlerteThematique> getMesAlertes(@RequestParam Long utilisateurId) {
-    return alerteRepo.findByUtilisateurId(utilisateurId);
+  @Transactional(readOnly = true)
+  public List<AlerteDto> getMesAlertes(@RequestParam Long utilisateurId) {
+    return alerteRepo.findByUtilisateurId(utilisateurId)
+        .stream()
+        .map(a -> new AlerteDto(a.getId(), a.getTypeAlerte(), a.getValeur(), a.getDateCreation()))
+        .toList();
   }
 
   @PostMapping
   @Transactional
-  public AlerteThematique creer(@RequestParam Long utilisateurId, @RequestBody AlerteRequest req) {
+  public AlerteDto creer(@RequestParam Long utilisateurId, @RequestBody AlerteRequest req) {
     if (alerteRepo.existsByUtilisateurIdAndTypeAlerteAndValeur(utilisateurId, req.typeAlerte(), req.valeur()))
-      throw new com.biblioteca.exception.BusinessException("Alerte déjà existante");
+      throw new BusinessException("Alerte déjà existante");
 
     Utilisateur u = utilisateurRepo.findById(utilisateurId)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Utilisateur introuvable"));
+        .orElseThrow(() -> new BusinessException("Utilisateur introuvable"));
 
-    return alerteRepo.save(AlerteThematique.builder()
+    AlerteThematique saved = alerteRepo.save(AlerteThematique.builder()
         .utilisateur(u)
         .typeAlerte(req.typeAlerte())
         .valeur(req.valeur())
         .build());
+
+    return new AlerteDto(saved.getId(), saved.getTypeAlerte(), saved.getValeur(), saved.getDateCreation());
   }
 
   @DeleteMapping("/{id}")

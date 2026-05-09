@@ -28,6 +28,7 @@ public interface LivreRepository extends JpaRepository<Livre, Long>, JpaSpecific
   @Query("SELECT c.nom, COUNT(l) FROM Livre l JOIN l.categorie c GROUP BY c.nom ORDER BY COUNT(l) DESC")
   List<Object[]> countLivresByCategorie();
 
-
+  @Query("SELECT COUNT(e) FROM Exemplaire e WHERE e.livre.id = :livreId AND e.disponible = true")
+  int countDisponiblesByLivreId(@Param("livreId") Long livreId);
 }
 

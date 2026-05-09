@@ -3,12 +3,17 @@ package com.biblioteca.controller.api;
 import com.biblioteca.entity.ListeLecture;
 import com.biblioteca.entity.Livre;
 import com.biblioteca.entity.Utilisateur;
+import com.biblioteca.exception.BusinessException;
 import com.biblioteca.repository.ListeLectureRepository;
 import com.biblioteca.repository.LivreRepository;
 import com.biblioteca.repository.UtilisateurRepository;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,95 +36,127 @@ public class ListeLectureApiController {
     this.utilisateurRepo = utilisateurRepo;
   }
 
+  // ── DTOs ────────────────────────────────────────────────────────────────
+
   public record ListeRequest(String titre, String description, String cours, boolean publique) {}
 
-  // Listes publiques (tous les rôles)
+  public record EnseignantDto(Long id, String prenom, String nom) {}
+
+  public record LivreListeDto(Long id, String titre, String auteur, String couverture) {}
+
+  public record ListeLectureDto(
+      Long id,
+      EnseignantDto enseignant,
+      String titre,
+      String description,
+      String cours,
+      boolean publique,
+      LocalDateTime dateCreation,
+      List<LivreListeDto> livres) {}
+
+  // ── Mapping ─────────────────────────────────────────────────────────────
+
+  private ListeLectureDto toDto(ListeLecture l) {
+    EnseignantDto ens = new EnseignantDto(
+        l.getEnseignant().getId(),
+        l.getEnseignant().getPrenom(),
+        l.getEnseignant().getNom());
+    List<LivreListeDto> livresDto = l.getLivres().stream()
+        .map(lv -> new LivreListeDto(lv.getId(), lv.getTitre(), lv.getAuteur(), lv.getCouverture()))
+        .toList();
+    return new ListeLectureDto(
+        l.getId(), ens, l.getTitre(), l.getDescription(),
+        l.getCours(), l.isPublique(), l.getDateCreation(), livresDto);
+  }
+
+  // ── Endpoints ───────────────────────────────────────────────────────────
+
   @GetMapping("/publiques")
-  public Page<ListeLecture> getPubliques(
+  @Transactional(readOnly = true)
+  public Page<ListeLectureDto> getPubliques(
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size) {
-    return listeRepo.findByPubliqueTrue(PageRequest.of(page, size));
+    Page<ListeLecture> p = listeRepo.findByPubliqueTrue(PageRequest.of(page, size));
+    return new PageImpl<>(p.getContent().stream().map(this::toDto).toList(), p.getPageable(), p.getTotalElements());
   }
 
-  // Mes listes (enseignant)
   @GetMapping("/mes-listes")
   @PreAuthorize("hasAnyRole('ENSEIGNANT','ADMIN','BIBLIOTHECAIRE')")
-  public List<ListeLecture> getMesListes(@RequestParam Long enseignantId) {
-    return listeRepo.findByEnseignantIdOrderByDateCreationDesc(enseignantId);
+  @Transactional(readOnly = true)
+  public List<ListeLectureDto> getMesListes(@RequestParam Long enseignantId) {
+    return listeRepo.findByEnseignantIdOrderByDateCreationDesc(enseignantId)
+        .stream().map(this::toDto).toList();
   }
 
-  // Toutes les listes (admin/biblio)
   @GetMapping("/admin/toutes")
   @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE')")
-  public Page<ListeLecture> toutes(
+  @Transactional(readOnly = true)
+  public Page<ListeLectureDto> toutes(
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return listeRepo.findAllByOrderByDateCreationDesc(PageRequest.of(page, size));
+    Page<ListeLecture> p = listeRepo.findAllByOrderByDateCreationDesc(PageRequest.of(page, size));
+    return new PageImpl<>(p.getContent().stream().map(this::toDto).toList(), p.getPageable(), p.getTotalElements());
   }
 
-  // Détail d'une liste
   @GetMapping("/{id}")
-  public ListeLecture getById(@PathVariable Long id) {
-    return listeRepo.findById(id)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Liste introuvable"));
+  @Transactional(readOnly = true)
+  public ListeLectureDto getById(@PathVariable Long id) {
+    return toDto(listeRepo.findById(id)
+        .orElseThrow(() -> new BusinessException("Liste introuvable")));
   }
 
-  // Créer une liste
   @PostMapping
   @PreAuthorize("hasAnyRole('ENSEIGNANT','ADMIN','BIBLIOTHECAIRE')")
   @Transactional
-  public ListeLecture creer(@RequestParam Long enseignantId, @RequestBody ListeRequest req) {
+  public ListeLectureDto creer(@RequestParam Long enseignantId, @RequestBody ListeRequest req) {
     Utilisateur u = utilisateurRepo.findById(enseignantId)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Utilisateur introuvable"));
-    return listeRepo.save(ListeLecture.builder()
+        .orElseThrow(() -> new BusinessException("Utilisateur introuvable"));
+    ListeLecture saved = listeRepo.save(ListeLecture.builder()
         .enseignant(u)
         .titre(req.titre())
         .description(req.description())
         .cours(req.cours())
         .publique(req.publique())
         .build());
+    return toDto(saved);
   }
 
-  // Modifier une liste
   @PutMapping("/{id}")
   @PreAuthorize("hasAnyRole('ENSEIGNANT','ADMIN','BIBLIOTHECAIRE')")
   @Transactional
-  public ListeLecture modifier(@PathVariable Long id, @RequestBody ListeRequest req) {
+  public ListeLectureDto modifier(@PathVariable Long id, @RequestBody ListeRequest req) {
     ListeLecture l = listeRepo.findById(id)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Liste introuvable"));
+        .orElseThrow(() -> new BusinessException("Liste introuvable"));
     l.setTitre(req.titre());
     l.setDescription(req.description());
     l.setCours(req.cours());
     l.setPublique(req.publique());
-    return listeRepo.save(l);
+    return toDto(listeRepo.save(l));
   }
 
-  // Ajouter un livre à la liste
   @PostMapping("/{id}/livres/{livreId}")
   @PreAuthorize("hasAnyRole('ENSEIGNANT','ADMIN','BIBLIOTHECAIRE')")
   @Transactional
-  public ListeLecture ajouterLivre(@PathVariable Long id, @PathVariable Long livreId) {
+  public ListeLectureDto ajouterLivre(@PathVariable Long id, @PathVariable Long livreId) {
     ListeLecture liste = listeRepo.findById(id)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Liste introuvable"));
+        .orElseThrow(() -> new BusinessException("Liste introuvable"));
     Livre livre = livreRepo.findById(livreId)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Livre introuvable"));
+        .orElseThrow(() -> new BusinessException("Livre introuvable"));
     if (!liste.getLivres().contains(livre)) liste.getLivres().add(livre);
-    return listeRepo.save(liste);
+    return toDto(listeRepo.save(liste));
   }
 
-  // Retirer un livre de la liste
   @DeleteMapping("/{id}/livres/{livreId}")
   @PreAuthorize("hasAnyRole('ENSEIGNANT','ADMIN','BIBLIOTHECAIRE')")
   @Transactional
   public Map<String, String> retirerLivre(@PathVariable Long id, @PathVariable Long livreId) {
     ListeLecture liste = listeRepo.findById(id)
-        .orElseThrow(() -> new com.biblioteca.exception.BusinessException("Liste introuvable"));
+        .orElseThrow(() -> new BusinessException("Liste introuvable"));
     liste.getLivres().removeIf(l -> l.getId().equals(livreId));
     listeRepo.save(liste);
     return Map.of("status", "ok");
   }
 
-  // Supprimer une liste
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAnyRole('ENSEIGNANT','ADMIN','BIBLIOTHECAIRE')")
   @Transactional

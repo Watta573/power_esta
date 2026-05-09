@@ -7,7 +7,7 @@ import { reservationsApi } from "@/api/reservations.api";
 import { useAuthStore } from "@/stores/auth.store";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faBookOpen, faPencil, faPrint, faTrash, faPlus, faCheck, faXmark, faHistory } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faBookOpen, faPencil, faPrint, faTrash, faPlus, faCheck, faXmark, faHistory, faHeart } from "@fortawesome/free-solid-svg-icons";
 import { toast } from "sonner";
 import { useState } from "react";
 import { couvertureUrl } from "@/lib/imageUrl";
@@ -16,6 +16,7 @@ import { useExportConfirm } from "@/hooks/useExportConfirm";
 import ExportConfirmModal from "@/components/shared/ExportConfirmModal";
 import type { EtatExemplaire, Exemplaire } from "@/types";
 import { useT } from "@/stores/i18n.store";
+import { useWishlistCheck, useToggleWishlist } from "@/hooks/useEspaceMembre";
 
 const ETATS: EtatExemplaire[] = ["BON", "ABIME", "PERDU", "RETIRE"];
 
@@ -25,6 +26,26 @@ const ETAT_COLORS: Record<EtatExemplaire, string> = {
   PERDU: "text-danger",
   RETIRE: "text-text-3",
 };
+
+function WishlistButtonDetail({ livreId, utilisateurId }: { livreId: number; utilisateurId: number }) {
+  const { data } = useWishlistCheck(utilisateurId, livreId);
+  const toggle = useToggleWishlist();
+  const inWishlist = data?.inWishlist ?? false;
+  return (
+    <button
+      onClick={() => toggle.mutate({ livreId, utilisateurId, inWishlist })}
+      disabled={toggle.isPending}
+      className={`flex w-full items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+        inWishlist
+          ? "border-red-300 bg-red-50 text-red-500 hover:bg-red-100"
+          : "border-border text-text-2 hover:border-red-300 hover:text-red-400"
+      }`}
+    >
+      <FontAwesomeIcon icon={faHeart} style={{ fontSize: 14 }} />
+      {inWishlist ? "Retirer de la wishlist" : "Ajouter à la wishlist"}
+    </button>
+  );
+}
 
 export default function LivreDetailPage() {
   const t = useT();
@@ -37,6 +58,7 @@ export default function LivreDetailPage() {
   const canManage = useAuthStore((s) => s.hasRole(["ADMIN", "BIBLIOTHECAIRE"]));
   const canEdit = useAuthStore((s) => s.hasRole(["ADMIN", "BIBLIOTHECAIRE"]));
   const canDelete = useAuthStore((s) => s.hasRole(["ADMIN"]));
+  const canWishlist = useAuthStore((s) => s.hasRole(["ETUDIANT", "ENSEIGNANT", "PUBLIC"]));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const { pending, requestExport, confirm, cancel } = useExportConfirm();
   const [showAddExemplaire, setShowAddExemplaire] = useState(false);
@@ -228,6 +250,9 @@ export default function LivreDetailPage() {
               >
                 {reservationMutation.isPending ? tl.enCours : tl.reserver}
               </button>
+            )}
+            {canWishlist && utilisateur && (
+              <WishlistButtonDetail livreId={livreId} utilisateurId={utilisateur.id} />
             )}
             <div className="flex items-center justify-center gap-2 rounded-lg bg-surface p-2">
               <StatusBadge statut={disponible ? "DISPONIBLE" : "INDISPONIBLE"} label={disponible ? `${livre.nombreDisponibles} disponible(s)` : "Indisponible"} />

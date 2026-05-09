@@ -24,7 +24,7 @@ public class AbonnementRelanceService {
     // ─── Relances expiration (tous les jours à 9h) ────────────────────────────
 
     @Scheduled(cron = "0 0 9 * * *")
-    @Transactional(readOnly = true)
+    @Transactional
     public void relancerExpirations() {
         LocalDate today = LocalDate.now();
 
@@ -53,7 +53,7 @@ public class AbonnementRelanceService {
     // ─── Relance demandes EN_ATTENTE oubliées (tous les jours à 10h) ─────────
 
     @Scheduled(cron = "0 0 10 * * *")
-    @Transactional(readOnly = true)
+    @Transactional
     public void relancerDemandesOubliees() {
         LocalDate il3Jours = LocalDate.now().minusDays(3);
         // Demandes soumises il y a 3 jours et toujours EN_ATTENTE

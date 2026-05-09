@@ -29,12 +29,12 @@ export interface AppTemplate {
 }
 
 export const BUILT_IN_TEMPLATES: AppTemplate[] = [
-  // 1 — Forêt (défaut)
+  // 1 Forêt (défaut)
   {
     id: "foret",
     name: "Forêt",
-    description: "Vert profond & or — thème par défaut",
-    emoji: "🌿",
+    description: "Vert profond et or, thème par défaut",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#1b4332", primaryLight: "#2d6a4f", primaryPale: "#d8f3dc",
@@ -44,12 +44,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "10px",
     },
   },
-  // 2 — Figma
+  // 2 Figma
   {
     id: "figma",
     name: "Figma",
-    description: "Violet & rose — inspiré de Figma",
-    emoji: "🎨",
+    description: "Violet et rose, inspiré de Figma",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#7c3aed", primaryLight: "#8b5cf6", primaryPale: "#ede9fe",
@@ -59,12 +59,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "8px",
     },
   },
-  // 3 — Claude (Anthropic)
+  // 3 Claude (Anthropic)
   {
     id: "claude",
     name: "Claude",
-    description: "Sable chaud & orange — inspiré de Claude",
-    emoji: "🤖",
+    description: "Sable chaud et orange, inspiré de Claude",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#c96442", primaryLight: "#e07a5f", primaryPale: "#fdf0eb",
@@ -74,12 +74,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "12px",
     },
   },
-  // 4 — Linear
+  // 4 Linear
   {
     id: "linear",
     name: "Linear",
-    description: "Indigo profond & blanc — inspiré de Linear",
-    emoji: "⚡",
+    description: "Indigo profond et blanc, inspiré de Linear",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#5e6ad2", primaryLight: "#7c85e0", primaryPale: "#eef0fb",
@@ -89,12 +89,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "6px",
     },
   },
-  // 5 — Notion
+  // 5 Notion
   {
     id: "notion",
     name: "Notion",
-    description: "Noir & blanc minimaliste — inspiré de Notion",
-    emoji: "📝",
+    description: "Noir et blanc minimaliste, inspiré de Notion",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#191919", primaryLight: "#37352f", primaryPale: "#f7f6f3",
@@ -104,12 +104,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "4px",
     },
   },
-  // 6 — Vercel
+  // 6 Vercel
   {
     id: "vercel",
     name: "Vercel",
-    description: "Noir absolu & blanc — inspiré de Vercel",
-    emoji: "▲",
+    description: "Noir absolu et blanc, inspiré de Vercel",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#000000", primaryLight: "#333333", primaryPale: "#fafafa",
@@ -119,12 +119,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "6px",
     },
   },
-  // 7 — Océan
+  // 7 Océan
   {
     id: "ocean",
     name: "Océan",
-    description: "Bleu marine & cyan — calme et professionnel",
-    emoji: "🌊",
+    description: "Bleu marine et cyan, calme et professionnel",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#1e3a5f", primaryLight: "#2e5f9e", primaryPale: "#dbeafe",
@@ -134,12 +134,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "10px",
     },
   },
-  // 8 — Bordeaux
+  // 8 Bordeaux
   {
     id: "bordeaux",
     name: "Bordeaux",
-    description: "Rouge bordeaux & or — élégance académique",
-    emoji: "🍷",
+    description: "Rouge bordeaux et or, élégance académique",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#6b1a2a", primaryLight: "#9b2335", primaryPale: "#fce7ea",
@@ -149,12 +149,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "8px",
     },
   },
-  // 9 — Ardoise
+  // 9 Ardoise
   {
     id: "ardoise",
     name: "Ardoise",
-    description: "Gris ardoise & violet — moderne et épuré",
-    emoji: "🪨",
+    description: "Gris ardoise et violet, moderne et épuré",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#334155", primaryLight: "#475569", primaryPale: "#e2e8f0",
@@ -164,12 +164,12 @@ export const BUILT_IN_TEMPLATES: AppTemplate[] = [
       radius: "12px",
     },
   },
-  // 10 — Sable
+  // 10 Sable
   {
     id: "sable",
     name: "Sable",
-    description: "Brun chaud & terracotta — chaleureux",
-    emoji: "🏜️",
+    description: "Brun chaud et terracotta, chaleureux",
+    emoji: "",
     builtIn: true,
     tokens: {
       primary: "#7c4a1e", primaryLight: "#a0622a", primaryPale: "#fef3e2",

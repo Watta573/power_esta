@@ -1,6 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFileArrowDown, faPrint, faBookmark, faPlus,
@@ -26,7 +27,7 @@ import { toast } from "sonner";
 import { useT, useI18nStore } from "@/stores/i18n.store";
 import type { Reservation, StatutReservation, Livre } from "@/types";
 
-// ─── Progression statut ───────────────────────────────────────────────────
+// Progression statut
 
 const STEPS: StatutReservation[] = ["EN_ATTENTE", "DISPONIBLE", "CONFIRMEE"];
 
@@ -337,6 +338,8 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
 export default function ReservationsPage() {
   const t = useT();
   const { locale } = useI18nStore();
+  const [searchParams] = useSearchParams();
+  const statutParam = searchParams.get("statut") as StatutReservation | null;
   const TABS: Array<{ key: StatutReservation | "TOUTES"; label: string }> = [
     { key: "EN_ATTENTE", label: t.statuts.EN_ATTENTE },
     { key: "DISPONIBLE", label: t.statuts.DISPONIBLE },
@@ -347,8 +350,18 @@ export default function ReservationsPage() {
   ];
   const [page, setPage]           = useState(0);
   const [search, setSearch]       = useState("");
-  const [statut, setStatut]       = useState<StatutReservation | "TOUTES">("EN_ATTENTE");
+  const [statut, setStatut]       = useState<StatutReservation | "TOUTES">(statutParam ?? "EN_ATTENTE");
   const [showModal, setShowModal] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Déclencher la vérification d'expiration quand on arrive sur l'onglet EXPIREE
+  useEffect(() => {
+    if (statut === "EXPIREE") {
+      reservationsApi.verifierExpiration().then(() => {
+        queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      }).catch(() => {});
+    }
+  }, [statut]);
 
   // Confirm dialogs
   const [confirmAnnuler,   setConfirmAnnuler]   = useState<{ id: number; titre: string } | null>(null);

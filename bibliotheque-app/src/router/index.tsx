@@ -31,6 +31,7 @@ import PeriodiquesPagE       from "@/pages/periodiques/PeriodiquesPagE";
 import CommunicationPage     from "@/pages/communication/CommunicationPage";
 import AdministrationPage    from "@/pages/administration/AdministrationPage";
 import AbonnementPage        from "@/pages/abonnement/AbonnementPage";
+import EspaceMembrePage      from "@/pages/espace-membre/EspaceMembrePage";
 
 export const router = createBrowserRouter([
   // Redirection par défaut vers l'accueil public
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
       { path: "finances",        element: <FinancesPage /> },
       { path: "abonnement",      element: <AbonnementPage /> },
       { path: "acquisitions",    element: <AcquisitionsPage /> },
+      { path: "espace-membre",   element: <EspaceMembrePage /> },
 
       { path: "emprunts",         element: <EmpruntsPage /> },
       { path: "emprunts/nouveau", element: <NouvelEmpruntPage /> },

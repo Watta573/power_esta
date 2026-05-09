@@ -89,12 +89,16 @@ public class ReservationServiceImpl implements ReservationService {
   @Scheduled(cron = "0 0 * * * *")
   @Transactional
   public void verifierExpiration() {
-    List<Reservation> expirables = reservationRepository.findByDateExpirationBeforeAndStatut(LocalDate.now(), StatutReservation.DISPONIBLE);
+    List<Reservation> expirables = reservationRepository.findByDateExpirationBeforeAndStatutIn(
+        LocalDate.now(), List.of(StatutReservation.DISPONIBLE, StatutReservation.EN_ATTENTE));
     for (Reservation r : expirables) {
+      boolean etaitDisponible = r.getStatut() == StatutReservation.DISPONIBLE;
       r.setStatut(StatutReservation.EXPIREE);
       reservationRepository.save(r);
+      notificationService.notifier(r.getUtilisateur(), TypeNotification.RESERVATION_EXPIREE,
+          "Votre réservation pour \"" + r.getLivre().getTitre() + "\" a expiré.", CanalNotification.INTERNE);
       notificationService.envoyerEmailReservationExpiree(r.getUtilisateur(), r.getLivre().getTitre());
-      notifierProchainEnAttente(r.getLivre().getId());
+      if (etaitDisponible) notifierProchainEnAttente(r.getLivre().getId());
     }
   }
 

@@ -6,6 +6,7 @@ import { useLireNotification, useLireToutesNotifications, useNotifications } fro
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { notificationsApi, type DiffusionGroupee } from "@/api/notifications.api";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import type { Notification } from "@/types";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -61,9 +62,22 @@ function HistoriqueCard({ d }: { d: DiffusionGroupee }) {
 
 function NotifCard({ notif, onLire }: { notif: Notification; onLire: (id: number) => void }) {
   const t = useT();
+  const navigate = useNavigate();
   const typeLabels = t.communication.typeLabels as Record<string, string>;
+  
+  const handleClick = () => {
+    if (notif.type === "RESERVATION_EXPIREE") {
+      navigate("/reservations?statut=EXPIREE");
+    }
+  };
+  
   return (
-    <div className={`flex items-start gap-4 rounded-xl border p-4 transition ${notif.lu ? "border-border bg-white opacity-70" : "border-primary/30 bg-primary/5"}`}>
+    <div 
+      onClick={handleClick}
+      className={`flex items-start gap-4 rounded-xl border p-4 transition ${notif.lu ? "border-border bg-white opacity-70" : "border-primary/30 bg-primary/5"} ${
+        notif.type === "RESERVATION_EXPIREE" ? "cursor-pointer hover:bg-primary/10" : ""
+      }`}
+    >
       <div className={`mt-0.5 rounded-full p-2 ${TYPE_COLORS[notif.type] ?? "bg-gray-100 text-gray-600"}`}>
         <Bell size={14} />
       </div>

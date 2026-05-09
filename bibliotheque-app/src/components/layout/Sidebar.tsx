@@ -4,7 +4,7 @@ import {
   faCalendarCheck, faClipboardList, faChartBar, faBell, faShield,
   faCartShopping, faDollarSign, faNewspaper, faMagnifyingGlass,
   faClockRotateLeft, faBookmark, faHouse, faChevronDown, faChartLine,
-  faChevronLeft, faTriangleExclamation, faGear,
+  faChevronLeft, faTriangleExclamation, faGear, faIdCard, faTruck,
 } from "@fortawesome/free-solid-svg-icons";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -44,9 +44,10 @@ const NAV: NavConfig = {
         { to: "/reservations",  labelKey: "reservations",     icon: faCalendarCheck },
         { to: "/periodiques",   labelKey: "periodiques",      icon: faNewspaper },
         { to: "/acquisitions",  labelKey: "acquisitions",     icon: faCartShopping },
-        { to: "/abonnement",    labelKey: "abonnements",      icon: faDollarSign },
+        { to: "/abonnement",    labelKey: "abonnements",    icon: faDollarSign },
         { to: "/finances",      labelKey: "finances",         icon: faChartBar },
         { to: "/communication", labelKey: "notifications",    icon: faBell },
+        { to: "/fournisseurs",  labelKey: "fournisseurs",     icon: faTruck },
       ],
     },
     {
@@ -87,8 +88,9 @@ const NAV: NavConfig = {
         { to: "/utilisateurs", labelKey: "lecteurs",       icon: faUsers },
         { to: "/emprunts",     labelKey: "empruntsRetours", icon: faClipboardList },
         { to: "/reservations", labelKey: "reservations",   icon: faCalendarCheck },
-        { to: "/abonnement",    labelKey: "abonnements",    icon: faDollarSign },
+        { to: "/abonnement",   labelKey: "abonnements",    icon: faDollarSign },
         { to: "/relances",     labelKey: "relances",       icon: faTriangleExclamation },
+        { to: "/fournisseurs", labelKey: "fournisseurs",   icon: faTruck },
       ],
     },
     {
@@ -132,7 +134,8 @@ const NAV: NavConfig = {
     {
       sectionKey: "compte",
       items: [
-        { to: "/communication", labelKey: "notifications",  icon: faBell },
+        { to: "/espace-membre",  labelKey: "espaceMembre",   icon: faIdCard },
+        { to: "/communication",  labelKey: "notifications",  icon: faBell },
         { to: "/abonnement",     labelKey: "monAbonnement",  icon: faDollarSign },
         { to: "/profil",         labelKey: "monProfil",      icon: faUser },
       ],
@@ -165,7 +168,8 @@ const NAV: NavConfig = {
     {
       sectionKey: "compte",
       items: [
-        { to: "/communication", labelKey: "notifications",  icon: faBell },
+        { to: "/espace-membre",  labelKey: "espaceMembre",   icon: faIdCard },
+        { to: "/communication",  labelKey: "notifications",  icon: faBell },
         { to: "/abonnement",     labelKey: "monAbonnement",  icon: faDollarSign },
         { to: "/profil",         labelKey: "monProfil",      icon: faUser },
       ],
@@ -197,9 +201,10 @@ const NAV: NavConfig = {
     {
       sectionKey: "compte",
       items: [
-        { to: "/abonnement",    labelKey: "monAbonnement", icon: faDollarSign },
-        { to: "/communication", labelKey: "notifications",  icon: faBell },
-        { to: "/profil",        labelKey: "monProfil",      icon: faUser },
+        { to: "/espace-membre",  labelKey: "espaceMembre",   icon: faIdCard },
+        { to: "/abonnement",     labelKey: "monAbonnement",  icon: faDollarSign },
+        { to: "/communication",  labelKey: "notifications",  icon: faBell },
+        { to: "/profil",         labelKey: "monProfil",      icon: faUser },
       ],
     },
   ],

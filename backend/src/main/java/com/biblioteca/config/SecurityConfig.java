@@ -1,6 +1,7 @@
 package com.biblioteca.config;
 
 import com.biblioteca.repository.UtilisateurRepository;
+import com.biblioteca.security.CinetPayWebhookFilter;
 import com.biblioteca.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,11 +31,14 @@ public class SecurityConfig {
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
   private final UtilisateurRepository utilisateurRepository;
+  private final CinetPayWebhookFilter cinetPayWebhookFilter;
 
   public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
-                        UtilisateurRepository utilisateurRepository) {
+                        UtilisateurRepository utilisateurRepository,
+                        CinetPayWebhookFilter cinetPayWebhookFilter) {
     this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     this.utilisateurRepository = utilisateurRepository;
+    this.cinetPayWebhookFilter = cinetPayWebhookFilter;
   }
 
   @Bean
@@ -49,11 +53,13 @@ public class SecurityConfig {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/api/auth/**").permitAll()
+            .requestMatchers("/api/cinetpay/notify").permitAll()
             .requestMatchers("/uploads/**").permitAll()
             .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/statistiques/public", "/api/statistiques/public-v2").permitAll()
             .requestMatchers("/api/**").authenticated()
             .anyRequest().permitAll()
         )
+        .addFilterBefore(cinetPayWebhookFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
     return http.build();
   }

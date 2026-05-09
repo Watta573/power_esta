@@ -26,4 +26,5 @@ export const ROUTES = {
   administration: "/administration",
   fournisseurs: "/fournisseurs",
   profil: "/profil",
+  espaceMembre: "/espace-membre",
 } as const;

@@ -13,12 +13,17 @@ import com.biblioteca.service.ReceiptPdfService;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -297,6 +302,281 @@ public class AbonnementApiController {
                         "dateFin", c.getDateFin().toString(),
                         "codeReservation", c.getCodeReservation() != null ? c.getCodeReservation() : "—"
                 )).toList();
+    }
+
+    // ─── Vue tous les abonnements (admin/biblio) ──────────────────────────────
+
+    public record CotisationListDto(
+        Long id, String codeReservation, String utilisateur, String email,
+        String identifiant, String formule, double montant,
+        String dateDebut, String dateFin, String datePaiement, String statut
+    ) {}
+
+    @GetMapping("/tous")
+    @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE')")
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<CotisationListDto> getTous(
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) String formule,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size) {
+        var pageable = org.springframework.data.domain.PageRequest.of(page, size,
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"));
+        var all = cotisationRepo.findAllByOrderByDatePaiementDesc(
+            org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        var filtered = all.stream().filter(c -> {
+            if (statut != null && !statut.isBlank() && !statut.equals(c.getStatut())) return false;
+            if (formule != null && !formule.isBlank() && !formule.equals(c.getNotes())) return false;
+            if (search != null && !search.isBlank()) {
+                String q = search.toLowerCase();
+                Utilisateur u = c.getUtilisateur();
+                return u.getNom().toLowerCase().contains(q)
+                    || u.getPrenom().toLowerCase().contains(q)
+                    || u.getEmail().toLowerCase().contains(q)
+                    || u.getIdentifiant().toLowerCase().contains(q)
+                    || (c.getCodeReservation() != null && c.getCodeReservation().toLowerCase().contains(q));
+            }
+            return true;
+        }).map(this::toCotisationListDto).toList();
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+        var pageContent = start >= filtered.size() ? List.<CotisationListDto>of() : filtered.subList(start, end);
+        return new org.springframework.data.domain.PageImpl<>(pageContent, pageable, filtered.size());
+    }
+
+    // ─── Mes abonnements (membre) ─────────────────────────────────────────────
+
+    @GetMapping("/mes-abonnements")
+    @PreAuthorize("isAuthenticated()")
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<CotisationListDto> getMesAbonnements(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) String formule,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Utilisateur u = utilisateurRepo.findByEmail(email)
+                .orElseThrow(() -> new BusinessException("Utilisateur introuvable"));
+        var pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        var all = cotisationRepo.findByUtilisateurIdOrderByDatePaiementDesc(u.getId(),
+            org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        var filtered = all.stream().filter(c -> {
+            if (statut != null && !statut.isBlank() && !statut.equals(c.getStatut())) return false;
+            if (formule != null && !formule.isBlank() && !formule.equals(c.getNotes())) return false;
+            if (search != null && !search.isBlank()) {
+                String q = search.toLowerCase();
+                return c.getNotes() != null && c.getNotes().toLowerCase().contains(q)
+                    || (c.getCodeReservation() != null && c.getCodeReservation().toLowerCase().contains(q));
+            }
+            return true;
+        }).map(this::toCotisationListDto).toList();
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+        var pageContent = start >= filtered.size() ? List.<CotisationListDto>of() : filtered.subList(start, end);
+        return new org.springframework.data.domain.PageImpl<>(pageContent, pageable, filtered.size());
+    }
+
+    // ─── Renouvellement (membre) ──────────────────────────────────────────────
+
+    @PostMapping("/renouveler")
+    @PreAuthorize("isAuthenticated()")
+    @Transactional
+    public ResponseEntity<Map<String, String>> renouveler(
+            @RequestBody SouscrireRequest req,
+            @AuthenticationPrincipal String email) {
+        Utilisateur u = utilisateurRepo.findByEmail(email)
+                .orElseThrow(() -> new BusinessException("Utilisateur introuvable"));
+        // Vérifier pas de demande EN_ATTENTE existante
+        var enAttente = cotisationRepo.findTopByUtilisateurIdAndStatutOrderByDateFinDesc(u.getId(), "EN_ATTENTE");
+        if (enAttente.isPresent()) {
+            throw new BusinessException("Vous avez déjà une demande en attente de validation");
+        }
+        FormulaAbonnement formula = formulaRepo.findById(req.formulaId())
+                .orElseThrow(() -> new BusinessException("Formule introuvable"));
+        // Partir de la date de fin de l'abonnement actif si encore valide, sinon aujourd'hui
+        var actif = cotisationRepo.findTopByUtilisateurIdAndStatutOrderByDateFinDesc(u.getId(), "ACTIVE");
+        LocalDate debut = actif.isPresent() && !actif.get().getDateFin().isBefore(LocalDate.now())
+            ? actif.get().getDateFin().plusDays(1) : LocalDate.now();
+        LocalDate fin = debut.plusMonths(formula.getDureeMois());
+        Cotisation c = Cotisation.builder()
+                .utilisateur(u).montant(formula.getPrix())
+                .dateDebut(debut).dateFin(fin)
+                .statut("EN_ATTENTE").notes(formula.getNom())
+                .build();
+        cotisationRepo.save(c);
+        try {
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            String dateHeure = now.format(java.time.format.DateTimeFormatter.ofPattern("EEEE dd MMMM yyyy 'à' HH:mm", java.util.Locale.FRENCH));
+            String html = emailService.buildEmailSouscription(
+                u.getPrenom(), formula.getNom(), formula.getPrix().doubleValue(),
+                debut.toString(), fin.toString(), c.getCodeReservation(), dateHeure);
+            emailService.sendSimpleEmail(u.getEmail(), "Renouvellement d'abonnement - Bibliotheque ESTA", html);
+        } catch (Exception e) {
+            System.err.println("Erreur envoi email renouvellement: " + e.getMessage());
+        }
+        return ResponseEntity.ok(Map.of(
+            "message", "Demande de renouvellement soumise.",
+            "formule", formula.getNom(),
+            "dateDebut", debut.toString(),
+            "dateFin", fin.toString()
+        ));
+    }
+
+    // ─── Export Excel ─────────────────────────────────────────────────────────
+
+    @GetMapping("/export/excel")
+    @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE')")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> exportExcel(
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) String formule,
+            @RequestParam(required = false) String search) throws Exception {
+        var items = getTous(statut, formule, search, 0, Integer.MAX_VALUE).getContent();
+        byte[] bytes = buildExcel(items);
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=abonnements.xlsx")
+            .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+            .body(bytes);
+    }
+
+    @GetMapping("/mes-abonnements/export/excel")
+    @PreAuthorize("isAuthenticated()")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> exportMesExcel(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) String formule,
+            @RequestParam(required = false) String search) throws Exception {
+        var items = getMesAbonnements(email, statut, formule, search, 0, Integer.MAX_VALUE).getContent();
+        byte[] bytes = buildExcel(items);
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=mes-abonnements.xlsx")
+            .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+            .body(bytes);
+    }
+
+    private byte[] buildExcel(List<CotisationListDto> items) throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = wb.createSheet("Abonnements");
+            String[] headers = {"Code", "Adhérent", "Email", "Identifiant", "Formule", "Montant (FCFA)", "Début", "Fin", "Paiement", "Statut"};
+            Row headerRow = sheet.createRow(0);
+            CellStyle style = wb.createCellStyle();
+            Font font = wb.createFont(); font.setBold(true); style.setFont(font);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]); cell.setCellStyle(style);
+            }
+            int rowNum = 1;
+            for (CotisationListDto c : items) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(c.codeReservation());
+                row.createCell(1).setCellValue(c.utilisateur());
+                row.createCell(2).setCellValue(c.email());
+                row.createCell(3).setCellValue(c.identifiant());
+                row.createCell(4).setCellValue(c.formule());
+                row.createCell(5).setCellValue(c.montant());
+                row.createCell(6).setCellValue(c.dateDebut());
+                row.createCell(7).setCellValue(c.dateFin());
+                row.createCell(8).setCellValue(c.datePaiement());
+                row.createCell(9).setCellValue(c.statut());
+            }
+            for (int i = 0; i < headers.length; i++) sheet.autoSizeColumn(i);
+            wb.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    // ─── Export PDF ───────────────────────────────────────────────────────────
+
+    @GetMapping("/export/pdf")
+    @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE')")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> exportPdf(
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) String formule,
+            @RequestParam(required = false) String search) throws Exception {
+        var items = getTous(statut, formule, search, 0, Integer.MAX_VALUE).getContent();
+        byte[] bytes = buildPdf(items, "Tous les abonnements");
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=abonnements.pdf")
+            .contentType(MediaType.APPLICATION_PDF)
+            .body(bytes);
+    }
+
+    @GetMapping("/mes-abonnements/export/pdf")
+    @PreAuthorize("isAuthenticated()")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> exportMesPdf(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) String formule,
+            @RequestParam(required = false) String search) throws Exception {
+        var items = getMesAbonnements(email, statut, formule, search, 0, Integer.MAX_VALUE).getContent();
+        byte[] bytes = buildPdf(items, "Mes abonnements");
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=mes-abonnements.pdf")
+            .contentType(MediaType.APPLICATION_PDF)
+            .body(bytes);
+    }
+
+    private byte[] buildPdf(List<CotisationListDto> items, String titre) throws Exception {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            com.itextpdf.text.Document doc = new com.itextpdf.text.Document(
+                com.itextpdf.text.PageSize.A4.rotate(), 20, 20, 30, 20);
+            com.itextpdf.text.pdf.PdfWriter.getInstance(doc, out);
+            doc.open();
+            com.itextpdf.text.Font titleFont = com.itextpdf.text.FontFactory.getFont(
+                com.itextpdf.text.FontFactory.HELVETICA_BOLD, 14);
+            com.itextpdf.text.Font smallFont = com.itextpdf.text.FontFactory.getFont(
+                com.itextpdf.text.FontFactory.HELVETICA, 8);
+            com.itextpdf.text.Font boldSmall = com.itextpdf.text.FontFactory.getFont(
+                com.itextpdf.text.FontFactory.HELVETICA_BOLD, 8);
+            doc.add(new com.itextpdf.text.Paragraph(titre, titleFont));
+            doc.add(new com.itextpdf.text.Paragraph("Généré le " + LocalDate.now(),
+                com.itextpdf.text.FontFactory.getFont(com.itextpdf.text.FontFactory.HELVETICA, 9)));
+            doc.add(com.itextpdf.text.Chunk.NEWLINE);
+            com.itextpdf.text.pdf.PdfPTable table = new com.itextpdf.text.pdf.PdfPTable(10);
+            table.setWidthPercentage(100);
+            table.setWidths(new float[]{10, 13, 16, 10, 9, 9, 9, 9, 9, 8});
+            String[] headers = {"Code", "Adhérent", "Email", "Identifiant", "Formule", "Montant", "Début", "Fin", "Paiement", "Statut"};
+            for (String h : headers) {
+                com.itextpdf.text.pdf.PdfPCell cell = new com.itextpdf.text.pdf.PdfPCell(
+                    new com.itextpdf.text.Phrase(h, boldSmall));
+                cell.setBackgroundColor(new com.itextpdf.text.BaseColor(220, 220, 220));
+                cell.setPadding(4);
+                table.addCell(cell);
+            }
+            for (CotisationListDto c : items) {
+                for (String val : new String[]{
+                    c.codeReservation(), c.utilisateur(), c.email(), c.identifiant(),
+                    c.formule(), String.valueOf(c.montant()), c.dateDebut(), c.dateFin(),
+                    c.datePaiement(), c.statut()}) {
+                    com.itextpdf.text.pdf.PdfPCell cell = new com.itextpdf.text.pdf.PdfPCell(
+                        new com.itextpdf.text.Phrase(val != null ? val : "—", smallFont));
+                    cell.setPadding(3);
+                    table.addCell(cell);
+                }
+            }
+            doc.add(table);
+            doc.close();
+            return out.toByteArray();
+        }
+    }
+
+    private CotisationListDto toCotisationListDto(Cotisation c) {
+        Utilisateur u = c.getUtilisateur();
+        return new CotisationListDto(
+            c.getId(), c.getCodeReservation() != null ? c.getCodeReservation() : "—",
+            u.getPrenom() + " " + u.getNom(), u.getEmail(), u.getIdentifiant(),
+            c.getNotes() != null ? c.getNotes() : "—",
+            c.getMontant().doubleValue(),
+            c.getDateDebut() != null ? c.getDateDebut().toString() : "—",
+            c.getDateFin() != null ? c.getDateFin().toString() : "—",
+            c.getDatePaiement() != null ? c.getDatePaiement().toString() : "—",
+            c.getStatut()
+        );
     }
 
     // ─── Admin CRUD formules ──────────────────────────────────────────────────

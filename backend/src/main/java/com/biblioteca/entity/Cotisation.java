@@ -27,7 +27,7 @@ public class Cotisation {
   @Column(name = "date_fin", nullable = false)
   private LocalDate dateFin;
 
-  /** ACTIVE, EXPIREE, ANNULEE */
+  /** ACTIVE, EN_ATTENTE, PAIEMENT_EN_COURS, EXPIREE, ANNULEE, REJETEE */
   @Column(nullable = false, length = 20)
   private String statut;
 
