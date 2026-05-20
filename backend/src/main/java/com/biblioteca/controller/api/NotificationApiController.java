@@ -86,9 +86,28 @@ public class NotificationApiController {
 
   @GetMapping("/historique-diffusions")
   @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE')")
-  public Page<DiffusionGroupee> historiqueDiffusions(
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
+  public Page<Map<String, Object>> historiqueDiffusions(
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return notificationService.getHistoriqueDiffusions(PageRequest.of(page, size));
+    return notificationService.getHistoriqueDiffusions(PageRequest.of(page, size))
+        .map(d -> {
+          var exp = d.getExpediteur();
+          return Map.<String, Object>of(
+              "id", d.getId(),
+              "sujet", d.getSujet(),
+              "message", d.getMessage(),
+              "type", d.getType(),
+              "rolesCibles", d.getRolesCibles(),
+              "nbDestinataires", d.getNbDestinataires(),
+              "dateEnvoi", d.getDateEnvoi() != null ? d.getDateEnvoi().toString() : "",
+              "statut", d.getStatut(),
+              "expediteur", exp != null ? Map.of(
+                  "id", exp.getId(),
+                  "nom", exp.getNom(),
+                  "prenom", exp.getPrenom()
+              ) : Map.of()
+          );
+        });
   }
 }

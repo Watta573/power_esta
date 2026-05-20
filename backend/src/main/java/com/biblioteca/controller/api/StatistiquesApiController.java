@@ -74,7 +74,7 @@ public class StatistiquesApiController {
             // Statistiques principales - VRAIES DONNÉES
             long totalLivres = livreRepository.count();
             long totalExemplaires = exemplaireRepository.count();
-            long exemplairesDisponibles = exemplaireRepository.countByDisponibleTrue();
+            long exemplairesDisponibles = exemplaireRepository.countByDisponibleTrueAndBloquePourReservationFalse();
             
             // Utiliser les enums pour les statuts
             long empruntsEnCours = empruntRepository.countByStatut(com.biblioteca.entity.enums.StatutEmprunt.EN_COURS);
@@ -159,7 +159,7 @@ public class StatistiquesApiController {
         LocalDate aujourdhui = LocalDate.now();
         try {
             long totalLivres = livreRepository.count();
-            long exemplairesDisponibles = exemplaireRepository.countByDisponibleTrue();
+            long exemplairesDisponibles = exemplaireRepository.countByDisponibleTrueAndBloquePourReservationFalse();
             long empruntsEnCours = empruntRepository.countByStatut(com.biblioteca.entity.enums.StatutEmprunt.EN_COURS);
             long reservationsEnAttente = reservationRepository.countByStatut(com.biblioteca.entity.enums.StatutReservation.EN_ATTENTE);
 

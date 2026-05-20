@@ -87,7 +87,7 @@ public class NotificationServiceImpl implements NotificationService {
   @Override
   @Async
   public void envoyerEmailBienvenue(Utilisateur utilisateur) {
-    String sujet = "Bienvenue à la Bibliothèque ESTA — Votre compte est créé";
+    String sujet = "Bienvenue à la Bibliothèque ESTA. Votre compte est créé";
     String html = buildEmailBienvenue(utilisateur);
     envoyerEmail(utilisateur.getEmail(), sujet, html);
     notifier(utilisateur, TypeNotification.COMPTE_CREE,
@@ -103,7 +103,7 @@ public class NotificationServiceImpl implements NotificationService {
     String html = buildEmailEmprunt(utilisateur, titreLivre, dateRetour);
     envoyerEmail(utilisateur.getEmail(), sujet, html);
     notifier(utilisateur, TypeNotification.EMPRUNT_CREE,
-        "Emprunt enregistré : " + titreLivre + " — retour prévu le " + dateRetour, CanalNotification.EMAIL);
+        "Emprunt enregistré : " + titreLivre + " —retour prévu le " + dateRetour, CanalNotification.EMAIL);
   }
 
   @Override
@@ -166,6 +166,25 @@ public class NotificationServiceImpl implements NotificationService {
 
   @Override
   @Async
+  public void envoyerEmailAmendePaye(Utilisateur utilisateur, String titreLivre, double montant) {
+    String sujet = "Amende encaissée " + titreLivre;
+    String html = baseTemplate("Amende encaissée",
+        "<p style='color:#374151;font-size:16px;line-height:1.6;'>Bonjour <strong>" + utilisateur.getPrenom() + " " + utilisateur.getNom() + "</strong>,</p>"
+        + "<p style='color:#374151;'>Votre amende a bien été encaissée. Merci pour votre régularisation.</p>"
+        + "<div style='background:#f0fdf4;border-left:4px solid #16a34a;padding:16px;border-radius:8px;margin:20px 0;'>"
+        + "<p style='margin:0;color:#374151;'>Livre : <strong>" + titreLivre + "</strong></p>"
+        + "<p style='margin:8px 0 0;color:#16a34a;font-weight:600;'>Montant payé : " + String.format("%.0f", montant) + " FCFA</p>"
+        + "<p style='margin:8px 0 0;color:#16a34a;'>Amende réglée</p>"
+        + "</div>"
+        + "<p style='color:#374151;'>Vous pouvez à nouveau emprunter des documents. Bonne lecture !</p>"
+        + "<div style='text-align:center;margin:28px 0;'>"
+        + "<a href='http://localhost:1420/emprunts' style='background:#1B4332;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block;'>Voir mes emprunts</a>"
+        + "</div>");
+    envoyerEmail(utilisateur.getEmail(), sujet, html);
+  }
+
+  @Override
+  @Async
   public void envoyerEmailEmpruntProlonge(Utilisateur utilisateur, String titreLivre, String nouvelleDateRetour) {
     if (!Boolean.TRUE.equals(utilisateur.getNotifEmailEmprunt())) return;
     String sujet = "Emprunt prolongé " + titreLivre;
@@ -183,7 +202,7 @@ public class NotificationServiceImpl implements NotificationService {
         "<p style='color:#374151;font-size:16px;line-height:1.6;'>Bonjour <strong>" + utilisateur.getPrenom() + " " + utilisateur.getNom() + "</strong>,</p>"
         + "<p style='color:#374151;'>Votre réservation pour le livre ci-dessous a expiré car vous n'avez pas confirmé dans le délai imparti.</p>"
         + "<div style='background:#fef2f2;border-left:4px solid #dc2626;padding:16px;border-radius:8px;margin:20px 0;'>"
-        + "<p style='margin:0;color:#374151;'>📚 Livre : <strong>" + titreLivre + "</strong></p>"
+        + "<p style='margin:0;color:#374151;'>Livre : <strong>" + titreLivre + "</strong></p>"
         + "<p style='margin:8px 0 0;color:#dc2626;'> Réservation expirée</p>"
         + "</div>"
         + "<p style='color:#374151;'>Vous pouvez effectuer une nouvelle réservation si le livre est toujours indisponible.</p>"
@@ -203,7 +222,7 @@ public class NotificationServiceImpl implements NotificationService {
         "<p style='color:#374151;font-size:16px;line-height:1.6;'>Bonjour <strong>" + utilisateur.getPrenom() + " " + utilisateur.getNom() + "</strong>,</p>"
         + "<p style='color:#374151;'>Votre réservation pour le document ci-dessous a été annulée.</p>"
         + "<div style='background:#fef2f2;border-left:4px solid #dc2626;padding:16px;border-radius:8px;margin:20px 0;'>"
-        + "<p style='margin:0;color:#374151;'>📚 Livre : <strong>" + titreLivre + "</strong></p>"
+        + "<p style='margin:0;color:#374151;'>Livre : <strong>" + titreLivre + "</strong></p>"
         + "<p style='margin:8px 0 0;color:#dc2626;'>Réservation annulée</p>"
         + "</div>"
         + "<p style='color:#374151;'>Vous pouvez effectuer une nouvelle réservation à tout moment depuis votre espace.</p>"
@@ -344,10 +363,10 @@ public class NotificationServiceImpl implements NotificationService {
 
   private String buildSujetGroupee(TypeNotification type) {
     return switch (type) {
-      case NOUVEAU_LIVRE    -> "📚 Nouveau livre disponible. Bibliothèque ESTA";
-      case RAPPEL_RETOUR    -> "⏰ Rappel de retour. Bibliothèque ESTA";
-      case RETARD_CONSTATE  -> "⚠️ Retard constaté. Bibliothèque ESTA";
-      default               -> "🔔 Message de la Bibliothèque ESTA";
+      case NOUVEAU_LIVRE    -> "Nouveau livre disponible. Bibliothèque ESTA";
+      case RAPPEL_RETOUR    -> "Rappel de retour. Bibliothèque ESTA";
+      case RETARD_CONSTATE  -> "Retard constaté. Bibliothèque ESTA";
+      default               -> "Message de la Bibliothèque ESTA";
     };
   }
 
@@ -357,12 +376,7 @@ public class NotificationServiceImpl implements NotificationService {
       case RAPPEL_RETOUR   -> "#d97706";
       default              -> "#1B4332";
     };
-    String emoji = switch (type) {
-      case NOUVEAU_LIVRE   -> "📚";
-      case RAPPEL_RETOUR   -> "⏰";
-      case RETARD_CONSTATE -> "⚠️";
-      default              -> "🔔";
-    };
+    String emoji = "";
     String contenu =
         "<p style='color:#374151;font-size:16px;line-height:1.6;'>Bonjour <strong>"
         + u.getPrenom() + " " + u.getNom() + "</strong>,</p>"
@@ -383,8 +397,8 @@ public class NotificationServiceImpl implements NotificationService {
         "<p style='color:#374151;font-size:16px;line-height:1.6;'>Bonjour <strong>" + u.getPrenom() + " " + u.getNom() + "</strong>,</p>"
         + "<p style='color:#374151;'>Votre emprunt a été enregistré avec succès.</p>"
         + "<div style='background:#f0fdf4;border-left:4px solid #1B4332;padding:16px;border-radius:8px;margin:20px 0;'>"
-        + "<p style='margin:0;color:#374151;'>📚 Livre : <strong>" + titreLivre + "</strong></p>"
-        + "<p style='margin:8px 0 0;color:#374151;'>📅 Date de retour prévue : <strong>" + dateRetour + "</strong></p>"
+        + "<p style='margin:0;color:#374151;'>Livre : <strong>" + titreLivre + "</strong></p>"
+        + "<p style='margin:8px 0 0;color:#374151;'>Date de retour prévue : <strong>" + dateRetour + "</strong></p>"
         + "</div>"
         + "<p style='color:#374151;'>Merci de retourner ce document avant la date prévue pour éviter toute amende.</p>"
         + "<div style='text-align:center;margin:28px 0;'>"
@@ -397,7 +411,7 @@ public class NotificationServiceImpl implements NotificationService {
         "<p style='color:#374151;font-size:16px;line-height:1.6;'>Bonjour <strong>" + u.getPrenom() + " " + u.getNom() + "</strong>,</p>"
         + "<p style='color:#374151;'>Le retour du document suivant a bien été enregistré.</p>"
         + "<div style='background:#f0fdf4;border-left:4px solid #1B4332;padding:16px;border-radius:8px;margin:20px 0;'>"
-        + "<p style='margin:0;color:#374151;'>📚 Livre : <strong>" + titreLivre + "</strong></p>"
+        + "<p style='margin:0;color:#374151;'>Livre : <strong>" + titreLivre + "</strong></p>"
         + "<p style='margin:8px 0 0;color:#16a34a;'>Retour confirmé</p>"
         + "</div>"
         + "<p style='color:#374151;'>Merci pour votre ponctualité. Vous pouvez emprunter de nouveaux documents.</p>");
@@ -408,8 +422,8 @@ public class NotificationServiceImpl implements NotificationService {
         "<p style='color:#374151;font-size:16px;line-height:1.6;'>Bonjour <strong>" + u.getPrenom() + " " + u.getNom() + "</strong>,</p>"
         + "<p style='color:#374151;'>Votre réservation a été enregistrée avec succès.</p>"
         + "<div style='background:#eff6ff;border-left:4px solid #3b82f6;padding:16px;border-radius:8px;margin:20px 0;'>"
-        + "<p style='margin:0;color:#374151;'>📚 Livre : <strong>" + titreLivre + "</strong></p>"
-        + "<p style='margin:8px 0 0;color:#374151;'>📍 Position dans la file : <strong>" + position + "</strong></p>"
+        + "<p style='margin:0;color:#374151;'>Livre : <strong>" + titreLivre + "</strong></p>"
+        + "<p style='margin:8px 0 0;color:#374151;'>Position dans la file : <strong>" + position + "</strong></p>"
         + "</div>"
         + "<p style='color:#374151;'>Vous serez notifié(e) par email dès qu'un exemplaire sera disponible.</p>"
         + "<div style='text-align:center;margin:28px 0;'>"
@@ -422,9 +436,9 @@ public class NotificationServiceImpl implements NotificationService {
         "<p style='color:#374151;font-size:16px;line-height:1.6;'>Bonjour <strong>" + u.getPrenom() + " " + u.getNom() + "</strong>,</p>"
         + "<p style='color:#374151;'>Un nouveau document vient d'être ajouté au catalogue.</p>"
         + "<div style='background:#fefce8;border-left:4px solid #eab308;padding:16px;border-radius:8px;margin:20px 0;'>"
-        + "<p style='margin:0;color:#374151;'>📚 Titre : <strong>" + titreLivre + "</strong></p>"
-        + "<p style='margin:8px 0 0;color:#374151;'>✍️ Auteur : <strong>" + auteur + "</strong></p>"
-        + "<p style='margin:4px 0 0;color:#374151;'>🏷️ Catégorie : <strong>" + categorie + "</strong></p>"
+        + "<p style='margin:0;color:#374151;'>Titre : <strong>" + titreLivre + "</strong></p>"
+        + "<p style='margin:8px 0 0;color:#374151;'>Auteur : <strong>" + auteur + "</strong></p>"
+        + "<p style='margin:4px 0 0;color:#374151;'>Catégorie : <strong>" + categorie + "</strong></p>"
         + "</div>"
         + "<div style='text-align:center;margin:28px 0;'>"
         + "<a href='http://localhost:1420/livres' style='background:#1B4332;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block;'>Voir le catalogue</a>"
@@ -553,9 +567,9 @@ public class NotificationServiceImpl implements NotificationService {
           Votre emprunt a été prolongé avec succès.
         </p>
         <div style="background:#f0fdf4;border-left:4px solid #1B4332;padding:16px;border-radius:8px;margin:20px 0;">
-          <p style="margin:0;color:#374151;">📚 Livre : <strong>""" + titreLivre + """
+          <p style="margin:0;color:#374151;">Livre : <strong>""" + titreLivre + """
           </strong></p>
-          <p style="margin:8px 0 0;color:#374151;">📅 Nouvelle date de retour : <strong>""" + nouvelleDateRetour + """
+          <p style="margin:8px 0 0;color:#374151;">Nouvelle date de retour : <strong>""" + nouvelleDateRetour + """
           </strong></p>
           <p style="margin:8px 0 0;color:#16a34a;">Prolongation confirmée</p>
         </div>

@@ -5,6 +5,7 @@ import {
   faCartShopping, faDollarSign, faNewspaper, faMagnifyingGlass,
   faClockRotateLeft, faBookmark, faHouse, faChevronDown, faChartLine,
   faChevronLeft, faTriangleExclamation, faGear, faIdCard, faTruck,
+  faCircleDollarToSlot,
 } from "@fortawesome/free-solid-svg-icons";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -55,6 +56,7 @@ const NAV: NavConfig = {
       items: [
         { to: "/rapports", labelKey: "statistiques",    icon: faChartBar },
         { to: "/relances", labelKey: "relancesAmendes", icon: faTriangleExclamation },
+        { to: "/amendes",  labelKey: "gestionAmendes",  icon: faCircleDollarToSlot },
       ],
     },
     {
@@ -90,6 +92,7 @@ const NAV: NavConfig = {
         { to: "/reservations", labelKey: "reservations",   icon: faCalendarCheck },
         { to: "/abonnement",   labelKey: "abonnements",    icon: faDollarSign },
         { to: "/relances",     labelKey: "relances",       icon: faTriangleExclamation },
+        { to: "/amendes",      labelKey: "gestionAmendes", icon: faCircleDollarToSlot },
         { to: "/fournisseurs", labelKey: "fournisseurs",   icon: faTruck },
       ],
     },

@@ -13,6 +13,7 @@ import {
   useCreerSuggestion, useChangerStatutSuggestion,
   useCreerCommande, useMarquerLivree, useAnnulerCommande,
 } from "@/hooks/useAcquisitions";
+import { useFournisseursList } from "@/hooks/useFournisseurs";
 import { exporterPDF } from "@/utils/exportPDF";
 import { exporterExcel } from "@/utils/exportExcel";
 import ExportConfirmModal from "@/components/shared/ExportConfirmModal";
@@ -92,6 +93,7 @@ export default function AcquisitionsPage() {
   const annulerCmdMutation = useAnnulerCommande();
   const creerSuggMutation  = useCreerSuggestion();
   const creerCmdMutation   = useCreerCommande();
+  const { data: fournisseursList } = useFournisseursList();
 
   const suggForm = useForm<SuggestionForm>({ resolver: zodResolver(suggestionSchema) });
   const cmdForm  = useForm<CommandeForm>({
@@ -417,8 +419,18 @@ export default function AcquisitionsPage() {
           }))} className="space-y-4">
             <div className="space-y-1">
               <label className="text-sm font-medium text-text-2">{t.acquisitions.fournisseurLabel}</label>
-              <input {...cmdForm.register("fournisseur")} placeholder={t.acquisitions.fournisseurPlaceholder}
-                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+              {(fournisseursList ?? []).length > 0 ? (
+                <select {...cmdForm.register("fournisseur")}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
+                  <option value="">-- Choisir un fournisseur --</option>
+                  {(fournisseursList ?? []).map((f: any) => (
+                    <option key={f.id} value={f.nom}>{f.nom}{f.contactNom ? ` — ${f.contactNom}` : ""}</option>
+                  ))}
+                </select>
+              ) : (
+                <input {...cmdForm.register("fournisseur")} placeholder={t.acquisitions.fournisseurPlaceholder}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+              )}
               {cmdForm.formState.errors.fournisseur && (
                 <p className="text-xs text-danger">{cmdForm.formState.errors.fournisseur.message}</p>
               )}
@@ -428,21 +440,31 @@ export default function AcquisitionsPage() {
                 <label className="text-sm font-medium text-text-2">{t.acquisitions.nbTitresLabel}</label>
                 <input {...cmdForm.register("nbTitres", { valueAsNumber: true })} type="number" min={1}
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                {cmdForm.formState.errors.nbTitres && (
+                  <p className="text-xs text-danger">{cmdForm.formState.errors.nbTitres.message}</p>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-text-2">{t.acquisitions.montantLabel}</label>
                 <input {...cmdForm.register("montant", { valueAsNumber: true })} type="number" min={0}
                   className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                {cmdForm.formState.errors.montant && (
+                  <p className="text-xs text-danger">{cmdForm.formState.errors.montant.message}</p>
+                )}
               </div>
             </div>
             <div className="space-y-1">
               <label className="text-sm font-medium text-text-2">{t.acquisitions.notes}</label>
-              <textarea {...cmdForm.register("notes")} rows={2}
+              <textarea {...cmdForm.register("notes")} rows={3} placeholder="Détails de la commande..."
                 className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div className="rounded-lg border border-border bg-surface p-3 text-xs text-text-2">
+              La commande sera créée avec le statut <strong>EN COURS</strong>. Vous pourrez la marquer comme livrée depuis l'onglet Commandes.
             </div>
             <div className="flex gap-3">
               <button type="submit" disabled={creerCmdMutation.isPending}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-white hover:bg-primary-light disabled:opacity-60">
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-white hover:bg-primary-light disabled:opacity-60">
+                <FontAwesomeIcon icon={faCartShopping} style={{ fontSize: 13 }} />
                 {creerCmdMutation.isPending ? t.acquisitions.creation : t.acquisitions.creerCommande}
               </button>
               <button type="button" onClick={() => setShowCmdForm(false)}

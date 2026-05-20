@@ -68,7 +68,7 @@ function ProgressionStatut({ statut }: { statut: StatutReservation }) {
   );
 }
 
-// ─── Modale nouvelle réservation ─────────────────────────────────────────
+// Modale nouvelle réservation
 
 function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
   const [step, setStep]                   = useState<1 | 2>(1);
@@ -80,11 +80,11 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
   const moi       = useAuthStore((s) => s.utilisateur);
   const canManage = useAuthStore((s) => s.hasRole(["ADMIN", "BIBLIOTHECAIRE"]));
 
-  const { data: livresIndisponiblesData, isLoading: loadingLivres } = useQuery({
-    queryKey: ["livres-indisponibles", searchLivre],
-    queryFn: () => livresApi.getIndisponibles({ q: searchLivre || undefined, size: 100 }).then((r) => r.data),
+  const { data: livresData, isLoading: loadingLivres } = useQuery({
+    queryKey: ["livres-reservation", searchLivre],
+    queryFn: () => livresApi.getAll({ q: searchLivre || undefined, size: 100 }).then((r) => r.data),
   });
-  const livresIndisponibles = livresIndisponiblesData?.content ?? [];
+  const livres = livresData?.content ?? [];
   const { data: usersData }  = useUtilisateurs({ q: searchUser || undefined, size: 6 });
 
   const creerMutation = useMutation({
@@ -173,10 +173,12 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
                         <p className="font-semibold text-text-1 line-clamp-1">{livreChoisi.titre}</p>
                         <p className="text-sm text-text-2">{livreChoisi.auteur}</p>
                         <div className="mt-1.5 flex items-center gap-2">
-                          <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger">
-                            0 / {livreChoisi.nombreExemplaires} disponible
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${livreChoisi.nombreDisponibles > 0 ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
+                            {livreChoisi.nombreDisponibles}/{livreChoisi.nombreExemplaires} disponible{livreChoisi.nombreDisponibles > 1 ? "s" : ""}
                           </span>
-                          <span className="text-[11px] text-text-3">File d'attente active</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${livreChoisi.nombreDisponibles > 0 ? "bg-success/15 text-success" : "bg-danger/15 text-danger"}`}>
+                            {livreChoisi.nombreDisponibles > 0 ? "Réservation immédiate" : "Mise en file d'attente"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -188,9 +190,10 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
                     </button>
                   </div>
                 ) : (
-                  /* Liste + recherche livres indisponibles */
+                  /* Liste + recherche livres */
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-text-1">Documents indisponibles</label>
+                    <label className="text-sm font-medium text-text-1">Documents</label>
+                    <p className="text-xs text-text-3">Vous pouvez réserver un livre disponible (réservation immédiate) ou mettre en file d'attente un livre indisponible.</p>
                     <div className="relative">
                       <FontAwesomeIcon icon={faMagnifyingGlass} style={{ fontSize: 13 }} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-3" />
                       <input
@@ -206,13 +209,13 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
                         <div className="flex items-center justify-center py-8">
                           <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                         </div>
-                      ) : livresIndisponibles.length === 0 ? (
+                      ) : livres.length === 0 ? (
                         <div className="flex flex-col items-center gap-1 py-8 text-center">
                           <FontAwesomeIcon icon={faBookmark} style={{ fontSize: 22 }} className="text-text-3" />
-                          <p className="text-sm font-medium text-text-2">Aucun document indisponible</p>
-                          <p className="text-xs text-text-3">Tous les exemplaires sont actuellement disponibles</p>
+                          <p className="text-sm font-medium text-text-2">Aucun document trouvé</p>
+                          <p className="text-xs text-text-3">Essayez une autre recherche ou réinitialisez le filtre</p>
                         </div>
-                      ) : livresIndisponibles.map((l) => (
+                      ) : livres.map((l) => (
                         <button
                           key={l.id}
                           onClick={() => { setLivreChoisi(l); setSearchLivre(""); }}
@@ -225,7 +228,14 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
                             <p className="truncate text-sm font-medium text-text-1">{l.titre}</p>
                             <p className="text-xs text-text-3">{l.auteur}</p>
                           </div>
-                          <span className="shrink-0 rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-semibold text-danger">0/{l.nombreExemplaires}</span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${l.nombreDisponibles > 0 ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
+                              {l.nombreDisponibles > 0 ? `${l.nombreDisponibles}/${l.nombreExemplaires} disponible${l.nombreDisponibles > 1 ? "s" : ""}` : `0/${l.nombreExemplaires}`}
+                            </span>
+                            <span className={`text-[10px] font-semibold ${l.nombreDisponibles > 0 ? "text-success" : "text-danger"}`}>
+                              {l.nombreDisponibles > 0 ? "Réservation immédiate" : "Mise en file d'attente"}
+                            </span>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -333,7 +343,7 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────
+// Page
 
 export default function ReservationsPage() {
   const t = useT();
@@ -442,15 +452,6 @@ export default function ReservationsPage() {
               {t.actions.remettre}
             </button>
           )}
-          {canManage && row.original.statut === "EN_ATTENTE" && (
-            <button
-              onClick={() => confirmerMutation.mutate(row.original.id)}
-              disabled={confirmerMutation.isPending}
-              className="rounded border border-primary px-2 py-1 text-xs text-primary hover:bg-primary/10 disabled:opacity-50"
-            >
-              {t.actions.disponible}
-            </button>
-          )}
           {["EN_ATTENTE", "DISPONIBLE"].includes(row.original.statut) && (
             (canManage
               ? row.original.utilisateur.id === utilisateur?.id  // staff : seulement les siennes
@@ -471,7 +472,7 @@ export default function ReservationsPage() {
               disabled={relancerMutation.isPending}
               className="rounded border border-primary px-2 py-1 text-xs text-primary hover:bg-primary/10 disabled:opacity-50"
             >
-              🔄 {t.actions.relancer}
+              {t.actions.relancer}
             </button>
           )}
           {canManage && ["ANNULEE", "EXPIREE", "CONFIRMEE"].includes(row.original.statut) && (

@@ -45,6 +45,7 @@ export interface Livre {
   anneePublication: number;
   categorie: Categorie;
   langue: string;
+  langueIds: number[];
   description: string;
   couverture?: string;
   nombreExemplaires: number;
@@ -72,6 +73,7 @@ export interface Emprunt {
   nombreRenouvellements: number;
   amende: number;
   joursRetard: number;
+  amendePayee: boolean;
 }
 
 export interface Reservation {

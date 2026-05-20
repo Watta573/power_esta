@@ -332,7 +332,7 @@ export default function AccueilPage() {
             to="/register"
             className="flex items-center gap-2 rounded-xl bg-[#e9c46a] px-6 py-3 font-semibold text-[#1b4332] hover:bg-[#c9a227] transition-colors"
           >
-            Créer un compte <FontAwesomeIcon icon={faArrowRight} style={{ fontSize: 13 }} />
+            Créer un compte
           </Link>
           <Link
             to="/login"

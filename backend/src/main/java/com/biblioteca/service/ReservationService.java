@@ -6,7 +6,7 @@ import java.util.List;
 public interface ReservationService {
   Reservation creerReservation(Long utilisateurId, Long livreId);
 
-  void notifierProchainEnAttente(Long livreId);
+  boolean notifierProchainEnAttente(Long livreId);
 
   void verifierExpiration();
 

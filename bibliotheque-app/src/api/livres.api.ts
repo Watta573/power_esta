@@ -31,7 +31,8 @@ export const livresApi = {
     apiClient.get<{ total: number; disponibles: number; empruntes: number; prochainRetour: string; tailleFile: number }>(`/livres/${id}/disponibilite`),
   create: (data: FormData) =>
     apiClient.post<Livre>("/admin/livres", data, { headers: { "Content-Type": "multipart/form-data" } }),
-  update: (id: number, data: Partial<Livre>) => apiClient.put<Livre>(`/admin/livres/${id}`, data),
+  update: (id: number, data: FormData) =>
+    apiClient.put<Livre>(`/admin/livres/${id}`, data, { headers: { "Content-Type": "multipart/form-data" } }),
   delete: (id: number) => apiClient.delete(`/admin/livres/${id}`),
   getExemplaires: (livreId: number) => apiClient.get<Exemplaire[]>(`/livres/${livreId}/exemplaires`),
   suggest: (q: string) => apiClient.get<string[]>(`/livres/suggest?q=${encodeURIComponent(q)}`),

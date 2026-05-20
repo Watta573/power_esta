@@ -28,6 +28,7 @@ import com.biblioteca.repository.MouvementLivreRepository;
 import com.biblioteca.repository.UtilisateurRepository;
 import com.biblioteca.service.LivreService;
 import com.biblioteca.service.NotificationService;
+import com.biblioteca.service.ReservationService;
 import com.biblioteca.util.FileStorageService;
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -35,6 +36,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +52,7 @@ public class LivreServiceImpl implements LivreService {
   private final FileStorageService fileStorageService;
   private final UtilisateurRepository utilisateurRepository;
   private final NotificationService notificationService;
+  private final ReservationService reservationService;
   private final LangueRepository langueRepository;
 
   public LivreServiceImpl(LivreRepository livreRepository,
@@ -59,6 +62,7 @@ public class LivreServiceImpl implements LivreService {
                           FileStorageService fileStorageService,
                           UtilisateurRepository utilisateurRepository,
                           NotificationService notificationService,
+                          @Lazy ReservationService reservationService,
                           LangueRepository langueRepository) {
     this.livreRepository = livreRepository;
     this.categorieRepository = categorieRepository;
@@ -67,6 +71,7 @@ public class LivreServiceImpl implements LivreService {
     this.fileStorageService = fileStorageService;
     this.utilisateurRepository = utilisateurRepository;
     this.notificationService = notificationService;
+    this.reservationService = reservationService;
     this.langueRepository = langueRepository;
   }
 
@@ -102,13 +107,14 @@ public class LivreServiceImpl implements LivreService {
     Livre saved = livreRepository.save(livre);
 
     int nbEx = dto.nombreExemplaires() != null && dto.nombreExemplaires() > 0 ? dto.nombreExemplaires() : 1;
+    boolean dispo = Boolean.TRUE.equals(dto.disponible());
     for (int i = 1; i <= nbEx; i++) {
       String code = saved.getIsbn() + "-EX" + String.format("%02d", i);
       exemplaireRepository.save(Exemplaire.builder()
           .livre(saved)
           .codeExemplaire(code)
           .etat(EtatExemplaire.BON)
-          .disponible(true)
+          .disponible(dispo)
           .build());
     }
     // Notifier les abonnés aux nouveaux livres
@@ -184,14 +190,50 @@ public class LivreServiceImpl implements LivreService {
   @Override
   @Transactional(readOnly = true)
   public long obtenirNombreExemplairesDisponibles(Long livreId) {
-    return exemplaireRepository.countByLivreIdAndDisponibleTrue(livreId);
+    return exemplaireRepository.countByLivreIdAndDisponibleTrueAndBloquePourReservationFalse(livreId);
   }
 
   @Override
   @Transactional(readOnly = true)
   public Exemplaire obtenirProchainExemplaireDisponible(Long livreId) {
-    return exemplaireRepository.findFirstByLivreIdAndDisponibleTrueOrderByIdAsc(livreId)
+    return exemplaireRepository.findFirstByLivreIdAndDisponibleTrueAndBloquePourReservationFalseOrderByIdAsc(livreId)
         .orElseThrow(() -> new BusinessException("Aucun exemplaire disponible"));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public long obtenirNombreExemplairesBloques(Long livreId) {
+    return exemplaireRepository.countByLivreIdAndBloquePourReservationTrue(livreId);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Exemplaire obtenirProchainExemplaireBloquePourReservation(Long livreId) {
+    return exemplaireRepository.findFirstByLivreIdAndBloquePourReservationTrueOrderByIdAsc(livreId)
+        .orElseThrow(() -> new BusinessException("Aucun exemplaire reservé pour réservation"));
+  }
+
+  @Override
+  @Transactional
+  public boolean bloquerProchainExemplaireDisponible(Long livreId) {
+    return exemplaireRepository.findFirstByLivreIdAndDisponibleTrueAndBloquePourReservationFalseOrderByIdAsc(livreId)
+        .map(ex -> {
+          ex.setBloquePourReservation(true);
+          exemplaireRepository.save(ex);
+          return true;
+        }).orElse(false);
+  }
+
+  @Override
+  @Transactional
+  public boolean libererProchainExemplaireBloque(Long livreId) {
+    return exemplaireRepository.findFirstByLivreIdAndBloquePourReservationTrueOrderByIdAsc(livreId)
+        .map(ex -> {
+          ex.setBloquePourReservation(false);
+          ex.setDisponible(true);
+          exemplaireRepository.save(ex);
+          return true;
+        }).orElse(false);
   }
 
   @Override
@@ -214,7 +256,11 @@ public class LivreServiceImpl implements LivreService {
         .disponible(req.disponible() == null ? Boolean.TRUE : req.disponible())
         .localisation(req.localisation())
         .build();
-    return exemplaireRepository.save(ex);
+    Exemplaire saved = exemplaireRepository.save(ex);
+    if (Boolean.TRUE.equals(saved.getDisponible())) {
+      reservationService.notifierProchainEnAttente(livreId);
+    }
+    return saved;
   }
 
   @Override
@@ -224,7 +270,11 @@ public class LivreServiceImpl implements LivreService {
         .orElseThrow(() -> new BusinessException("Exemplaire introuvable"));
     if (etat != null) ex.setEtat(etat);
     if (disponible != null) ex.setDisponible(disponible);
-    return exemplaireRepository.save(ex);
+    Exemplaire saved = exemplaireRepository.save(ex);
+    if (Boolean.TRUE.equals(saved.getDisponible())) {
+      reservationService.notifierProchainEnAttente(saved.getLivre().getId());
+    }
+    return saved;
   }
 
   @Override

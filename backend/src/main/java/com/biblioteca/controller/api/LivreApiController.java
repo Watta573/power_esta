@@ -86,7 +86,7 @@ public class LivreApiController {
       @RequestParam(required = false) String q,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "12") int size) {
-    Specification<Livre> spec = LivreSpecifications.build(q, null, null, null, null, null, null, true, exemplaireRepository);
+    Specification<Livre> spec = LivreSpecifications.build(q, null, null, null, null, null, null, false, exemplaireRepository);
     Page<Livre> livres = livreRepository.findAll(spec,
         PageRequest.of(Math.max(page, 0), Math.min(size, 100), Sort.by("titre")));
     return PageResponseDto.from(livres.map(dtoMapper::toLivreDto));

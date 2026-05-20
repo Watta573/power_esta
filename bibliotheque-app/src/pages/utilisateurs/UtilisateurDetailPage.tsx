@@ -159,7 +159,7 @@ export default function UtilisateurDetailPage() {
           <table className="w-full text-sm">
             <thead className="bg-surface-2 text-text-2">
               <tr>
-                {["Livre", "Emprunté le", "Retour prévu", "Retour effectif", "Statut", "Amende"].map((h) => (
+                {["Livre", "Emprunté le", "Retour prévu", "Retour effectif", "Statut", "Retard / Amende"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
                 ))}
               </tr>
@@ -172,10 +172,16 @@ export default function UtilisateurDetailPage() {
                   <td className="px-4 py-3 font-medium">{e.livre.titre}</td>
                   <td className="px-4 py-3 text-text-2">{e.dateEmprunt}</td>
                   <td className="px-4 py-3 text-text-2">{e.dateRetourPrevue}</td>
-                  <td className="px-4 py-3 text-text-2">{e.dateRetourEffective ?? "—"}</td>
+                  <td className="px-4 py-3 text-text-2">{e.dateRetourEffective ?? <span className="italic text-text-3">Non retourné</span>}</td>
                   <td className="px-4 py-3"><StatusBadge statut={e.statut} /></td>
                   <td className="px-4 py-3">
-                    {e.amende > 0 ? <span className="font-medium text-danger">{e.amende.toLocaleString("fr-FR")} FCFA</span> : "—"}
+                    {e.joursRetard > 0 && (
+                      <p className="text-xs font-medium text-danger">{e.joursRetard}j de retard</p>
+                    )}
+                    {e.amende > 0
+                      ? <span className="font-medium text-danger">{e.amende.toLocaleString("fr-FR")} FCFA{e.amendePayee && <span className="ml-1 text-success text-xs">✓ payée</span>}</span>
+                      : <span className="text-text-3">—</span>
+                    }
                   </td>
                 </tr>
               ))}

@@ -25,7 +25,8 @@ public record LivreSaveRequest(
     List<Long> langueIds,
     String description,
     Integer nombrePages,
-    Integer nombreExemplaires
+    Integer nombreExemplaires,
+    Boolean disponible
 ) {
   // Compatibilité rétrograde
   public String langue() { return null; }

@@ -18,6 +18,7 @@ import EmpruntsPage          from "@/pages/emprunts/EmpruntsPage";
 import NouvelEmpruntPage     from "@/pages/emprunts/NouvelEmpruntPage";
 import ReservationsPage      from "@/pages/reservations/ReservationsPage";
 import RelancesPage          from "@/pages/relances/RelancesPage";
+import AmendesPage           from "@/pages/amendes/AmendesPage";
 import RapportsPage          from "@/pages/rapports/RapportsPage";
 import ProfilPage            from "@/pages/profil/ProfilPage";
 import UtilisateursPage      from "@/pages/utilisateurs/UtilisateursPage";
@@ -74,6 +75,7 @@ export const router = createBrowserRouter([
       { path: "admin/livres/nouveau",       element: <AdminRoute><LivreFormPage /></AdminRoute> },
       { path: "admin/livres/:id/modifier",  element: <AdminRoute><LivreFormPage /></AdminRoute> },
       { path: "relances",                   element: <AdminRoute><RelancesPage /></AdminRoute> },
+      { path: "amendes",                    element: <AdminRoute><AmendesPage /></AdminRoute> },
       { path: "rapports",                   element: <AdminRoute><RapportsPage /></AdminRoute> },
 
       { path: "administration", element: <AdminOnly><AdministrationPage /></AdminOnly> },

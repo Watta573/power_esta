@@ -13,6 +13,7 @@ public record EmpruntDto(
     StatutEmprunt statut,
     int nombreRenouvellements,
     double amende,
-    long joursRetard
+    long joursRetard,
+    boolean amendePayee
 ) {}
 

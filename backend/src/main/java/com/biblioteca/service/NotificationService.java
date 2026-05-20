@@ -31,6 +31,8 @@ public interface NotificationService {
 
   void envoyerEmailAmende(Utilisateur utilisateur, String titreLivre, double montant);
 
+  void envoyerEmailAmendePaye(Utilisateur utilisateur, String titreLivre, double montant);
+
   void envoyerEmailEmpruntProlonge(Utilisateur utilisateur, String titreLivre, String nouvelleDateRetour);
 
   void envoyerEmailReservationExpiree(Utilisateur utilisateur, String titreLivre);

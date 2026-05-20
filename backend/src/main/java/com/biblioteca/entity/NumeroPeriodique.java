@@ -1,5 +1,6 @@
 package com.biblioteca.entity;
 
+import com.biblioteca.entity.enums.StatutNumeroPeriodique;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import lombok.*;
@@ -25,8 +26,15 @@ public class NumeroPeriodique {
   @Column(name = "date_parution", nullable = false)
   private LocalDate dateParution;
 
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private StatutNumeroPeriodique statut;
+
   @Column(nullable = false)
   private Boolean disponible;
+
+  @Column(name = "date_reception")
+  private LocalDate dateReception;
 
   @Column(length = 100)
   private String localisation;
@@ -36,6 +44,7 @@ public class NumeroPeriodique {
 
   @PrePersist
   void prePersist() {
-    if (disponible == null) disponible = true;
+    if (statut == null) statut = StatutNumeroPeriodique.ATTENDU;
+    if (disponible == null) disponible = statut != StatutNumeroPeriodique.ATTENDU;
   }
 }

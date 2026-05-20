@@ -9,4 +9,6 @@ export const empruntsApi = {
   payerAmende: (id: number) => apiClient.put<Emprunt>(`/emprunts/${id}/payer-amende`),
   getByLivre: (livreId: number, params?: { page?: number; size?: number }) =>
     apiClient.get<PageResponse<Emprunt>>("/emprunts", { params: { ...params, livreId } }),
+  getAmendes: (params?: { payee?: boolean; page?: number; size?: number }) =>
+    apiClient.get<PageResponse<Emprunt>>("/emprunts/amendes", { params }),
 };

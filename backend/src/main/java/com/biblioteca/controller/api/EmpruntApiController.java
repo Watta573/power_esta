@@ -113,10 +113,30 @@ public class EmpruntApiController {
     return toDto(empruntService.payerAmende(id));
   }
 
+  @GetMapping("/amendes")
+  @RequirePermission("FINANCES_AMENDES_COLLECT")
+  @Transactional(readOnly = true)
+  public PageResponseDto<EmpruntDto> listAmendes(
+      @RequestParam(name = "payee", required = false) Boolean payee,
+      @RequestParam(name = "page", defaultValue = "0") int page,
+      @RequestParam(name = "size", defaultValue = "20") int size
+  ) {
+    PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+    Page<Emprunt> p = (payee == null)
+        ? empruntRepository.findAllAmendes(pageable)
+        : empruntRepository.findAmendesByPayee(payee, pageable);
+    return PageResponseDto.from(p.map(this::toDto));
+  }
+
   private EmpruntDto toDto(Emprunt e) {
+    LocalDate reference = e.getDateRetourEffective() != null ? e.getDateRetourEffective() : LocalDate.now();
     long joursRetard = 0;
-    if (e.getDateRetourEffective() == null && e.getDateRetourPrevue() != null) {
-      joursRetard = Math.max(0, LocalDate.now().toEpochDay() - e.getDateRetourPrevue().toEpochDay());
+    double amendeValue = e.getAmende() == null ? 0 : e.getAmende().doubleValue();
+    if (e.getDateRetourPrevue() != null) {
+      joursRetard = Math.max(0, reference.toEpochDay() - e.getDateRetourPrevue().toEpochDay());
+      if (joursRetard > 0 && e.getStatut() != StatutEmprunt.RETOURNE) {
+        amendeValue = joursRetard * 100.0;
+      }
     }
     LivreDto livreDto = null;
     if (e.getExemplaire() != null && e.getExemplaire().getLivre() != null) {
@@ -132,8 +152,9 @@ public class EmpruntApiController {
         e.getDateRetourEffective() == null ? null : e.getDateRetourEffective().toString(),
         e.getStatut(),
         e.getNombreRenouvellements() == null ? 0 : e.getNombreRenouvellements(),
-        e.getAmende() == null ? 0 : e.getAmende().doubleValue(),
-        joursRetard
+        amendeValue,
+        joursRetard,
+        Boolean.TRUE.equals(e.getAmendePayee())
     );
   }
 }

@@ -1,5 +1,7 @@
 package com.biblioteca.dto.api;
 
+import java.util.List;
+
 public record LivreDto(
     Long id,
     String titre,
@@ -10,6 +12,7 @@ public record LivreDto(
     Integer anneePublication,
     CategorieDto categorie,
     String langue,
+    List<Long> langueIds,
     String description,
     String couverture,
     long nombreExemplaires,

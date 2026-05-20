@@ -38,7 +38,7 @@ function PeriodiqueForm({ initial, onSubmit, onCancel, isPending }: {
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-text-2">{t.periodiques.issnLabel}</label>
-          <input value={form.issn} onChange={set("issn")} placeholder="XXXX-XXXX"
+          <input value={form.issn} onChange={set("issn")} placeholder="1234-5678-9012-3456"
             className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
         </div>
         <div className="space-y-1">

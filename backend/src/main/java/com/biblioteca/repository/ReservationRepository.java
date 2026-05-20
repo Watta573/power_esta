@@ -26,6 +26,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
   Optional<Reservation> findFirstByLivreIdAndStatutOrderByPositionAsc(Long livreId, StatutReservation statut);
 
+  long countByLivreIdAndStatut(Long livreId, StatutReservation statut);
+
   List<Reservation> findByDateExpirationBeforeAndStatut(LocalDate date, StatutReservation statut);
 
   List<Reservation> findByDateExpirationBeforeAndStatutIn(LocalDate date, List<StatutReservation> statuts);

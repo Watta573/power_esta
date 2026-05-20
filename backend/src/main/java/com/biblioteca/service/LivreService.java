@@ -34,7 +34,15 @@ public interface LivreService {
 
   long obtenirNombreExemplairesDisponibles(Long livreId);
 
+  long obtenirNombreExemplairesBloques(Long livreId);
+
   Exemplaire obtenirProchainExemplaireDisponible(Long livreId);
+
+  Exemplaire obtenirProchainExemplaireBloquePourReservation(Long livreId);
+
+  boolean bloquerProchainExemplaireDisponible(Long livreId);
+
+  boolean libererProchainExemplaireBloque(Long livreId);
 
   List<Exemplaire> listerExemplaires(Long livreId);
 

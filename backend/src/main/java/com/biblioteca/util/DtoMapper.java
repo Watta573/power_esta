@@ -43,12 +43,14 @@ public class DtoMapper {
     CategorieDto categorie = livre.getCategorie() == null ? null
         : new CategorieDto(livre.getCategorie().getId(), livre.getCategorie().getNom(),
             livre.getCategorie().getCouleur());
-    long disponibles = exemplaireRepository.countByLivreIdAndDisponibleTrue(livre.getId());
+    long disponibles = exemplaireRepository.countByLivreIdAndDisponibleTrueAndBloquePourReservationFalse(livre.getId());
     long total = exemplaireRepository.countByLivreId(livre.getId());
+    java.util.List<Long> langueIds = livre.getLangues() == null ? java.util.List.of()
+        : livre.getLangues().stream().map(l -> l.getId()).collect(java.util.stream.Collectors.toList());
     return new LivreDto(
         livre.getId(), livre.getTitre(), livre.getAuteur(), livre.getIsbn(),
         livre.getEditeur(), livre.getEdition(), livre.getAnneePublication(),
-        categorie, livre.getLangue(), livre.getDescription(), livre.getCouverture(),
+        categorie, livre.getLangue(), langueIds, livre.getDescription(), livre.getCouverture(),
         total, disponibles, Boolean.TRUE.equals(livre.getActif())
     );
   }

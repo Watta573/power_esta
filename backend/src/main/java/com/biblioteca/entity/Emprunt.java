@@ -59,6 +59,9 @@ public class Emprunt {
   @Column(nullable = false, precision = 12, scale = 2)
   private BigDecimal amende;
 
+  @Column(nullable = false)
+  private Boolean amendePayee;
+
   @Column(columnDefinition = "TEXT")
   private String notes;
 
@@ -68,6 +71,7 @@ public class Emprunt {
     if (statut == null) statut = StatutEmprunt.EN_COURS;
     if (nombreRenouvellements == null) nombreRenouvellements = 0;
     if (amende == null) amende = BigDecimal.ZERO;
+    if (amendePayee == null) amendePayee = false;
   }
 }
 

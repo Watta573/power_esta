@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,13 +44,20 @@ public class CirculationAvanceeService {
      */
     public boolean peutEmprunter(Utilisateur utilisateur, Livre livre) {
         RegleCirculation regle = getRegleApplicable(utilisateur, "LIVRE");
-        
-        // Vérifier le quota d'emprunts (utiliser une méthode simple)
-        // Pour l'instant, on suppose que l'utilisateur peut emprunter
-        // TODO: Implémenter la vérification réelle avec les méthodes du repository
-        
-        // Vérifier si l'utilisateur n'est pas suspendu
-        return utilisateur.getActif();
+
+        if (!Boolean.TRUE.equals(utilisateur.getActif())) {
+            return false;
+        }
+
+        if (empruntRepository.existsByUtilisateurIdAndStatut(utilisateur.getId(), StatutEmprunt.EN_RETARD)) {
+            return false;
+        }
+
+        long empruntsEnCours = empruntRepository.countByUtilisateurIdAndStatut(
+                utilisateur.getId(), StatutEmprunt.EN_COURS);
+
+        Integer maxEmprunts = regle.getNbEmpruntsMax();
+        return maxEmprunts == null || empruntsEnCours < maxEmprunts;
     }
 
     /**
@@ -128,11 +136,29 @@ public class CirculationAvanceeService {
      */
     @Transactional
     public void mettreAJourAmendes() {
-        // Utiliser une approche simplifiée pour l'instant
-        // TODO: Implémenter avec les bonnes méthodes du repository
-        
-        // Pour l'instant, on ne fait rien pour éviter les erreurs
-        // Cette méthode sera implémentée plus tard
+        LocalDate now = LocalDate.now();
+        List<Emprunt> emprunts = empruntRepository.findByStatutIn(
+                List.of(StatutEmprunt.EN_COURS, StatutEmprunt.EN_RETARD));
+        List<Emprunt> aMettreAJour = new ArrayList<>();
+
+        for (Emprunt emprunt : emprunts) {
+            if (emprunt.getDateRetourPrevue() == null ||
+                !emprunt.getDateRetourPrevue().isBefore(now) ||
+                emprunt.getDateRetourEffective() != null) {
+                continue;
+            }
+
+            BigDecimal amende = calculerAmende(emprunt);
+            emprunt.setAmende(amende);
+            if (emprunt.getStatut() == StatutEmprunt.EN_COURS) {
+                emprunt.setStatut(StatutEmprunt.EN_RETARD);
+            }
+            aMettreAJour.add(emprunt);
+        }
+
+        if (!aMettreAJour.isEmpty()) {
+            empruntRepository.saveAll(aMettreAJour);
+        }
     }
 
     /**

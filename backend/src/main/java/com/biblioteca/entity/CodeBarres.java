@@ -25,9 +25,11 @@ public class CodeBarres {
     @Column(nullable = false, unique = true, length = 100)
     private String code;
     
+    @Builder.Default
     @Column(name = "type_code", length = 20)
     private String typeCode = "CODE128"; // CODE128, EAN13, QR
-    
+
+    @Builder.Default
     @Column(name = "date_creation")
     private LocalDateTime dateCreation = LocalDateTime.now();
     

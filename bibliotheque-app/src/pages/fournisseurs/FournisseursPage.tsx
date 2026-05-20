@@ -24,8 +24,8 @@ function FournisseurForm({ initial, onSubmit, onCancel, isPending }: {
       <div className="grid gap-3 sm:grid-cols-2">
         {[
           { key: "nom",        label: "Nom",            placeholder: "Nom du fournisseur" },
-          { key: "email",      label: "Email",          placeholder: "contact@fournisseur.com" },
-          { key: "telephone",  label: "Téléphone",      placeholder: "+225 XX XX XX XX" },
+          { key: "email",      label: "Email",          placeholder: "Votre adresse email" },
+          { key: "telephone",  label: "Téléphone",      placeholder: "+22656100125" },
           { key: "contactNom", label: "Contact",        placeholder: "Nom du contact" },
         ].map(({ key, label, placeholder }) => (
           <div key={key} className="space-y-1">

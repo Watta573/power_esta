@@ -64,11 +64,19 @@ export function usePayerAmende() {
     mutationFn: empruntsApi.payerAmende,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["emprunts"] });
+      queryClient.invalidateQueries({ queryKey: ["amendes"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success("Amende encaissée avec succès");
+      toast.success("Amende encaissée — l'utilisateur a été notifié");
     },
     onError: (error: AxiosError<{ message: string }>) => {
       toast.error(error.response?.data?.message ?? "Erreur lors de l'encaissement");
     },
+  });
+}
+
+export function useAmendes(params?: { payee?: boolean; page?: number; size?: number }) {
+  return useQuery({
+    queryKey: ["amendes", params],
+    queryFn: () => empruntsApi.getAmendes(params).then((r) => r.data),
   });
 }

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.biblioteca.entity.Emprunt;
 import com.biblioteca.entity.Exemplaire;
+import com.biblioteca.entity.Livre;
 import com.biblioteca.entity.Utilisateur;
 import com.biblioteca.entity.enums.Role;
 import com.biblioteca.entity.enums.StatutEmprunt;
@@ -19,6 +20,7 @@ import com.biblioteca.repository.EmpruntRepository;
 import com.biblioteca.repository.ExemplaireRepository;
 import com.biblioteca.repository.UtilisateurRepository;
 import com.biblioteca.service.NotificationService;
+import com.biblioteca.service.ReservationService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -41,6 +43,8 @@ class EmpruntServiceImplTest {
   private ExemplaireRepository exemplaireRepository;
   @Mock
   private NotificationService notificationService;
+  @Mock
+  private ReservationService reservationService;
 
   @InjectMocks
   private EmpruntServiceImpl service;
@@ -59,7 +63,7 @@ class EmpruntServiceImplTest {
   @Test
   void creerEmprunt_shouldFailWhenQuotaReached() {
     Utilisateur u = Utilisateur.builder().id(1L).role(Role.ETUDIANT).email("a@a.com").build();
-    Exemplaire ex = Exemplaire.builder().id(2L).disponible(true).build();
+    Exemplaire ex = Exemplaire.builder().id(2L).disponible(true).livre(Livre.builder().titre("Java").build()).build();
     when(utilisateurRepository.findById(1L)).thenReturn(Optional.of(u));
     when(exemplaireRepository.findById(2L)).thenReturn(Optional.of(ex));
     when(empruntRepository.existsByUtilisateurIdAndStatut(1L, StatutEmprunt.EN_RETARD)).thenReturn(false);
@@ -72,7 +76,8 @@ class EmpruntServiceImplTest {
   @Test
   void creerEmprunt_shouldCreateAndMarkExemplaireUnavailable() {
     Utilisateur u = Utilisateur.builder().id(1L).role(Role.ETUDIANT).email("a@a.com").build();
-    Exemplaire ex = Exemplaire.builder().id(2L).disponible(true).build();
+    Livre livre = Livre.builder().titre("Java").build();
+    Exemplaire ex = Exemplaire.builder().id(2L).disponible(true).livre(livre).build();
     when(utilisateurRepository.findById(1L)).thenReturn(Optional.of(u));
     when(exemplaireRepository.findById(2L)).thenReturn(Optional.of(ex));
     when(empruntRepository.existsByUtilisateurIdAndStatut(1L, StatutEmprunt.EN_RETARD)).thenReturn(false);
@@ -86,6 +91,36 @@ class EmpruntServiceImplTest {
     assertEquals(LocalDate.now().plusDays(14), created.getDateRetourPrevue());
     verify(exemplaireRepository).save(ex);
     verify(empruntRepository).save(any(Emprunt.class));
+  }
+
+  @Test
+  void creerEmprunt_shouldFailWhenExemplaireBlockedForReservation() {
+    Utilisateur u = Utilisateur.builder().id(1L).role(Role.ETUDIANT).email("a@a.com").build();
+    Livre livre = Livre.builder().titre("Java").build();
+    Exemplaire ex = Exemplaire.builder().id(2L).disponible(true).bloquePourReservation(true).livre(livre).build();
+    when(utilisateurRepository.findById(1L)).thenReturn(Optional.of(u));
+    when(exemplaireRepository.findById(2L)).thenReturn(Optional.of(ex));
+
+    assertThrows(BusinessException.class, () -> service.creerEmprunt(1L, 2L));
+    verify(empruntRepository, never()).save(any());
+  }
+
+  @Test
+  void enregistrerRetour_shouldReleaseBlockedExemplaireAndPromoteReservation() {
+    Livre livre = Livre.builder().id(2L).titre("Java").build();
+    Exemplaire ex = Exemplaire.builder().id(2L).disponible(false).bloquePourReservation(true).livre(livre).build();
+    Emprunt e = Emprunt.builder().id(10L).exemplaire(ex).utilisateur(Utilisateur.builder().id(1L).email("a@a.com").build()).dateRetourPrevue(LocalDate.now().minusDays(1)).statut(StatutEmprunt.EN_COURS).build();
+
+    when(empruntRepository.findById(10L)).thenReturn(Optional.of(e));
+    when(empruntRepository.save(any(Emprunt.class))).thenAnswer(i -> i.getArgument(0));
+    when(exemplaireRepository.save(any(Exemplaire.class))).thenAnswer(i -> i.getArgument(0));
+    when(reservationService.notifierProchainEnAttente(2L)).thenReturn(true);
+
+    Emprunt returned = service.enregistrerRetour(10L);
+
+    assertEquals(StatutEmprunt.RETOURNE, returned.getStatut());
+    assertFalse(ex.getBloquePourReservation());
+    verify(reservationService).notifierProchainEnAttente(2L);
   }
 
   @Test
@@ -105,9 +140,12 @@ class EmpruntServiceImplTest {
   @Test
   void renouvelerEmprunt_shouldIncreaseOnce() {
     Utilisateur u = Utilisateur.builder().id(1L).role(Role.ENSEIGNANT).build();
+    Livre livre = Livre.builder().titre("Java").build();
+    Exemplaire ex = Exemplaire.builder().livre(livre).build();
     Emprunt e = Emprunt.builder()
         .id(9L)
         .utilisateur(u)
+        .exemplaire(ex)
         .dateRetourPrevue(LocalDate.now().plusDays(2))
         .nombreRenouvellements(0)
         .statut(StatutEmprunt.EN_COURS)

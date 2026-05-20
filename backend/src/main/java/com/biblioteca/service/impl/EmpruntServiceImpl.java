@@ -67,6 +67,9 @@ public class EmpruntServiceImpl implements EmpruntService {
     Exemplaire ex = exemplaireRepository.findById(exemplaireId)
         .orElseThrow(() -> new BusinessException("Exemplaire introuvable"));
     if (!Boolean.TRUE.equals(ex.getDisponible())) throw new BusinessException("Exemplaire indisponible");
+    if (Boolean.TRUE.equals(ex.getBloquePourReservation())) {
+      throw new BusinessException("Exemplaire réservé pour une réservation");
+    }
     if (empruntRepository.existsByUtilisateurIdAndStatut(utilisateurId, StatutEmprunt.EN_RETARD)) {
       throw new BusinessException("Utilisateur bloque: retard existant");
     }
@@ -84,6 +87,7 @@ public class EmpruntServiceImpl implements EmpruntService {
         .amende(BigDecimal.ZERO)
         .build();
     ex.setDisponible(false);
+    ex.setBloquePourReservation(false);
     exemplaireRepository.save(ex);
     Emprunt saved = empruntRepository.save(e);
     notificationService.envoyerEmailEmprunt(
@@ -104,6 +108,7 @@ public class EmpruntServiceImpl implements EmpruntService {
     e.setStatut(StatutEmprunt.RETOURNE);
     Exemplaire ex = e.getExemplaire();
     ex.setDisponible(true);
+    ex.setBloquePourReservation(false);
     exemplaireRepository.save(ex);
     Emprunt saved = empruntRepository.save(e);
     notificationService.envoyerEmailRetourConfirme(e.getUtilisateur(), e.getExemplaire().getLivre().getTitre());
@@ -115,8 +120,17 @@ public class EmpruntServiceImpl implements EmpruntService {
           e.getExemplaire().getLivre().getTitre(),
           amende.doubleValue());
     }
-    // Notifier le prochain en file d'attente si réservation existe
-    reservationService.notifierProchainEnAttente(ex.getLivre().getId());
+    boolean promotionnee = reservationService.notifierProchainEnAttente(ex.getLivre().getId());
+    if (promotionnee) {
+      notificationService.envoyerGroupee(
+          List.of("ADMIN", "BIBLIOTHECAIRE"),
+          "Réservation prête pour le retour : " + ex.getLivre().getTitre(),
+          "Le livre \"" + ex.getLivre().getTitre() + "\" est revenu et a été attribué à la prochaine réservation.",
+          TypeNotification.LIVRE_DISPONIBLE.name(),
+          null,
+          null
+      );
+    }
     return saved;
   }
 
@@ -148,12 +162,22 @@ public class EmpruntServiceImpl implements EmpruntService {
   public Emprunt payerAmende(Long empruntId) {
     Emprunt e = empruntRepository.findById(empruntId)
         .orElseThrow(() -> new BusinessException("Emprunt introuvable"));
-    if (e.getStatut() != StatutEmprunt.EN_RETARD) {
-      throw new BusinessException("Cet emprunt n'a pas d'amende en cours");
+    if (e.getAmende() == null || e.getAmende().compareTo(BigDecimal.ZERO) <= 0) {
+      throw new BusinessException("Cet emprunt n'a pas d'amende à payer");
     }
-    e.setAmende(java.math.BigDecimal.ZERO);
-    e.setStatut(StatutEmprunt.EN_COURS);
-    return empruntRepository.save(e);
+    e.setAmendePayee(true);
+    if (e.getStatut() == StatutEmprunt.EN_RETARD) {
+      e.setStatut(StatutEmprunt.EN_COURS);
+    }
+    Emprunt saved = empruntRepository.save(e);
+    notificationService.notifier(e.getUtilisateur(), TypeNotification.AMENDE_GENEREE,
+        "Votre amende de " + e.getAmende() + " FCFA pour \"" + e.getExemplaire().getLivre().getTitre() + "\" a été encaissée. Merci !",
+        CanalNotification.INTERNE);
+    notificationService.envoyerEmailAmendePaye(
+        e.getUtilisateur(),
+        e.getExemplaire().getLivre().getTitre(),
+        e.getAmende().doubleValue());
+    return saved;
   }
 
   @Override
@@ -169,7 +193,22 @@ public class EmpruntServiceImpl implements EmpruntService {
   @Override
   @Transactional(readOnly = true)
   public List<Emprunt> getEmpruntsEnRetard() {
-    return empruntRepository.findByStatutIn(List.of(StatutEmprunt.EN_RETARD));
+    List<Emprunt> list = empruntRepository.findByStatutIn(List.of(StatutEmprunt.EN_RETARD));
+    LocalDate now = LocalDate.now();
+    for (Emprunt e : list) {
+      if (e.getDateRetourPrevue() == null) {
+        e.setAmende(BigDecimal.ZERO);
+        continue;
+      }
+      LocalDate reference = e.getDateRetourEffective() == null ? now : e.getDateRetourEffective();
+      long days = ChronoUnit.DAYS.between(e.getDateRetourPrevue(), reference);
+      if (days <= 0) {
+        e.setAmende(BigDecimal.ZERO);
+      } else {
+        e.setAmende(tarifJournalier.multiply(BigDecimal.valueOf(days)));
+      }
+    }
+    return list;
   }
 
   @Override
@@ -201,14 +240,17 @@ public class EmpruntServiceImpl implements EmpruntService {
     // Détection retards
     List<Emprunt> retards = empruntRepository.findByDateRetourPrevueBeforeAndStatut(today, StatutEmprunt.EN_COURS);
     for (Emprunt e : retards) {
+      long days = ChronoUnit.DAYS.between(e.getDateRetourPrevue(), today);
+      BigDecimal amende = (days <= 0) ? BigDecimal.ZERO : tarifJournalier.multiply(BigDecimal.valueOf(days));
+      e.setAmende(amende);
       e.setStatut(StatutEmprunt.EN_RETARD);
       empruntRepository.save(e);
       notificationService.notifier(e.getUtilisateur(), TypeNotification.RETARD_CONSTATE,
-          "Emprunt en retard pour " + e.getExemplaire().getCodeExemplaire(), CanalNotification.INTERNE);
+        "Emprunt en retard pour " + e.getExemplaire().getCodeExemplaire(), CanalNotification.INTERNE);
       notificationService.envoyerEmailRetard(
-          e.getUtilisateur(),
-          e.getExemplaire().getLivre().getTitre(),
-          java.time.temporal.ChronoUnit.DAYS.between(e.getDateRetourPrevue(), today)
+        e.getUtilisateur(),
+        e.getExemplaire().getLivre().getTitre(),
+        days
       );
     }
   }

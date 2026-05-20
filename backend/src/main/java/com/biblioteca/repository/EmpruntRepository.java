@@ -54,5 +54,11 @@ public interface EmpruntRepository extends JpaRepository<Emprunt, Long> {
 
   @Query("select coalesce(sum(e.amende), 0) from Emprunt e")
   java.math.BigDecimal sumAmendes();
+
+  @Query("select e from Emprunt e where e.amende > 0 order by e.dateRetourEffective desc nulls last")
+  Page<Emprunt> findAllAmendes(Pageable pageable);
+
+  @Query("select e from Emprunt e where e.amende > 0 and e.amendePayee = :payee order by e.dateRetourEffective desc nulls last")
+  Page<Emprunt> findAmendesByPayee(@Param("payee") boolean payee, Pageable pageable);
 }
 

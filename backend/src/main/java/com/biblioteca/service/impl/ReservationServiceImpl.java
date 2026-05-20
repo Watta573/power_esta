@@ -1,5 +1,6 @@
 package com.biblioteca.service.impl;
 
+import com.biblioteca.entity.Exemplaire;
 import com.biblioteca.entity.Livre;
 import com.biblioteca.entity.Reservation;
 import com.biblioteca.entity.Utilisateur;
@@ -53,36 +54,56 @@ public class ReservationServiceImpl implements ReservationService {
   public Reservation creerReservation(Long utilisateurId, Long livreId) {
     Utilisateur u = utilisateurRepository.findById(utilisateurId).orElseThrow(() -> new BusinessException("Utilisateur introuvable"));
     Livre l = livreRepository.findById(livreId).orElseThrow(() -> new BusinessException("Livre introuvable"));
-    if (livreService.obtenirNombreExemplairesDisponibles(livreId) > 0) throw new BusinessException("Livre disponible: pas de reservation");
-    long n = reservationRepository.countByUtilisateurIdAndStatutIn(utilisateurId, List.of(StatutReservation.EN_ATTENTE, StatutReservation.DISPONIBLE));
-    if (n >= 3) throw new BusinessException("Max 3 reservations simultanees");
-    int pos = reservationRepository.findByLivreIdAndStatutOrderByPositionAsc(livreId, StatutReservation.EN_ATTENTE).size() + 1;
+    boolean disponibilite = livreService.obtenirNombreExemplairesDisponibles(livreId) > 0;
+    long enAttenteCount = reservationRepository.countByLivreIdAndStatut(livreId, StatutReservation.EN_ATTENTE);
+    long actifCount = reservationRepository.countByUtilisateurIdAndStatutIn(utilisateurId, List.of(StatutReservation.EN_ATTENTE, StatutReservation.DISPONIBLE));
+    if (actifCount >= 3) throw new BusinessException("Max 3 reservations simultanees");
+    boolean peutEtreDisponible = disponibilite && enAttenteCount == 0;
+    StatutReservation statut = peutEtreDisponible ? StatutReservation.DISPONIBLE : StatutReservation.EN_ATTENTE;
+    if (peutEtreDisponible && !livreService.bloquerProchainExemplaireDisponible(livreId)) {
+      statut = StatutReservation.EN_ATTENTE;
+    }
+    int position = statut == StatutReservation.DISPONIBLE ? 1 : (int) enAttenteCount + 1;
     Reservation r = Reservation.builder()
         .utilisateur(u)
         .livre(l)
-        .position(pos)
+        .position(position)
         .dateExpiration(LocalDate.now().plusDays(dureeValidite))
-        .statut(StatutReservation.EN_ATTENTE)
-        .notifie(false)
+        .statut(statut)
+        .notifie(statut == StatutReservation.DISPONIBLE)
         .build();
     Reservation saved = reservationRepository.save(r);
-    notificationService.envoyerEmailReservationCreee(u, l.getTitre(), pos);
+    notificationService.envoyerEmailReservationCreee(u, l.getTitre(), position);
     return saved;
   }
 
   @Override
   @Transactional
-  public void notifierProchainEnAttente(Long livreId) {
-    reservationRepository.findFirstByLivreIdAndStatutOrderByPositionAsc(livreId, StatutReservation.EN_ATTENTE).ifPresent(r -> {
-      r.setStatut(StatutReservation.DISPONIBLE);
-      r.setNotifie(true);
-      r.setDateExpiration(LocalDate.now().plusDays(dureeValidite));
-      reservationRepository.save(r);
-      notificationService.notifier(r.getUtilisateur(), TypeNotification.LIVRE_DISPONIBLE,
-          "Votre reservation est disponible: " + r.getLivre().getTitre(), CanalNotification.INTERNE);
-      notificationService.envoyerEmailLivreDisponible(
-          r.getUtilisateur(), r.getLivre().getTitre());
-    });
+  public boolean notifierProchainEnAttente(Long livreId) {
+    long copiesDisponibles = livreService.obtenirNombreExemplairesDisponibles(livreId);
+    long blocsReservables = livreService.obtenirNombreExemplairesBloques(livreId);
+    long reservationsDisponibles = reservationRepository.countByLivreIdAndStatut(livreId, StatutReservation.DISPONIBLE);
+    long copiesLibresPourReservation = copiesDisponibles + Math.max(blocsReservables - reservationsDisponibles, 0);
+    if (copiesLibresPourReservation <= 0) {
+      return false;
+    }
+
+    if (copiesDisponibles > 0) {
+      livreService.bloquerProchainExemplaireDisponible(livreId);
+    }
+
+    return reservationRepository.findFirstByLivreIdAndStatutOrderByPositionAsc(livreId, StatutReservation.EN_ATTENTE)
+        .map(r -> {
+          r.setStatut(StatutReservation.DISPONIBLE);
+          r.setNotifie(true);
+          r.setDateExpiration(LocalDate.now().plusDays(dureeValidite));
+          reservationRepository.save(r);
+          notificationService.notifier(r.getUtilisateur(), TypeNotification.LIVRE_DISPONIBLE,
+              "Votre reservation est disponible: " + r.getLivre().getTitre(), CanalNotification.INTERNE);
+          notificationService.envoyerEmailLivreDisponible(
+              r.getUtilisateur(), r.getLivre().getTitre());
+          return true;
+        }).orElse(false);
   }
 
   @Override
@@ -98,7 +119,11 @@ public class ReservationServiceImpl implements ReservationService {
       notificationService.notifier(r.getUtilisateur(), TypeNotification.RESERVATION_EXPIREE,
           "Votre réservation pour \"" + r.getLivre().getTitre() + "\" a expiré.", CanalNotification.INTERNE);
       notificationService.envoyerEmailReservationExpiree(r.getUtilisateur(), r.getLivre().getTitre());
-      if (etaitDisponible) notifierProchainEnAttente(r.getLivre().getId());
+      if (etaitDisponible) {
+        if (!notifierProchainEnAttente(r.getLivre().getId())) {
+          livreService.libererProchainExemplaireBloque(r.getLivre().getId());
+        }
+      }
     }
   }
 
@@ -116,7 +141,12 @@ public class ReservationServiceImpl implements ReservationService {
     if (r.getStatut() != StatutReservation.DISPONIBLE) throw new BusinessException("Reservation non disponible");
     r.setStatut(StatutReservation.CONFIRMEE);
     reservationRepository.save(r);
-    var ex = livreService.obtenirProchainExemplaireDisponible(r.getLivre().getId());
+    Exemplaire ex;
+    try {
+      ex = livreService.obtenirProchainExemplaireBloquePourReservation(r.getLivre().getId());
+    } catch (BusinessException e) {
+      ex = livreService.obtenirProchainExemplaireDisponible(r.getLivre().getId());
+    }
     empruntService.creerEmprunt(r.getUtilisateur().getId(), ex.getId());
     return r;
   }
@@ -145,7 +175,11 @@ public class ReservationServiceImpl implements ReservationService {
       notificationService.notifier(r.getUtilisateur(), TypeNotification.RESERVATION_CREEE,
           "Votre réservation pour \"" + r.getLivre().getTitre() + "\" a été annulée.", CanalNotification.INTERNE);
       notificationService.envoyerEmailReservationAnnulee(r.getUtilisateur(), r.getLivre().getTitre());
-      if (etaitDisponible) notifierProchainEnAttente(livreId);
+      if (!notifierProchainEnAttente(livreId)) {
+        if (etaitDisponible) {
+          livreService.libererProchainExemplaireBloque(livreId);
+        }
+      }
     } else {
       throw new BusinessException("Annulation non autorisee");
     }

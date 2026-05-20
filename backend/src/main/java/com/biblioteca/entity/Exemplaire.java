@@ -45,12 +45,16 @@ public class Exemplaire {
   @Column(nullable = false)
   private Boolean disponible;
 
+  @Column(nullable = false, columnDefinition = "boolean default false")
+  private Boolean bloquePourReservation;
+
   @Column(length = 120)
   private String localisation;
 
   @PrePersist
   void prePersist() {
     if (disponible == null) disponible = true;
+    if (bloquePourReservation == null) bloquePourReservation = false;
     if (etat == null) etat = EtatExemplaire.BON;
   }
 }

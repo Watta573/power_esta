@@ -5,7 +5,7 @@ Architecture et déploiement d'un écosystème numérique complexe dédié à la
 
 ---
 
-## 🛠️ Configuration du Projet (Étape par Étape)
+## Configuration du Projet (Étape par Étape)
 
 ### 1. Prérequis
 Avant de commencer, assurez-vous d'avoir installé :
@@ -77,19 +77,51 @@ psql -U votre_user -d power_esta -f all_permissions_complete.sql
 
 ---
 
-## 📁 Structure du Projet
+## Structure du Projet
 
 - `/backend` : API REST Spring Boot (Java).
 - `/bibliotheque-app` : Interface utilisateur React + Vite + Tailwind CSS.
 - `/*.sql` : Scripts de maintenance et d'initialisation de la base de données.
 
-## 🔑 Identifiants par défaut (Seed Data)
+## Identifiants par défaut (Seed Data)
 - **Admin** : `admin` / `admin123` (à vérifier dans V2__seed_data.sql)
 - **Email de test** : `admin@esta.bf`
 
 ---
 
-## 📝 Maintenance
+## Maintenance
 Si vous rencontrez des problèmes de permissions ou de schéma :
 1. Utilisez `fix_sql_syntax.sql` pour corriger les erreurs de syntaxe.
 2. Utilisez `all_permissions_complete.sql` pour réinitialiser les droits d'accès.
+
+---
+
+## Déploiement
+
+Ce dépôt contient deux parties déployables : le frontend (`bibliotheque-app`) et le backend (`backend`). Des workflows GitHub Actions sont fournis pour automatiser la construction et le déploiement.
+
+- Frontend : publication sur GitHub Pages (branche `gh-pages`) via `.github/workflows/deploy-frontend.yml`.
+- Backend : build Maven + image Docker poussée sur GitHub Container Registry (ghcr.io) via `.github/workflows/backend-docker.yml`.
+
+Étapes rapides pour publier le projet sur GitHub (à lancer depuis la racine du projet) :
+
+```bash
+# initialiser le dépôt local (si nécessaire)
+git init
+git add .
+git commit -m "Add GitHub Actions workflows and deployment docs"
+git branch -M main
+git remote add origin https://github.com/Watta573/power_esta.git
+git push -u origin main
+```
+
+Notes et vérifications post-push :
+
+- GitHub Pages : allez dans les paramètres du dépôt → Pages, configurez la source sur la branche `gh-pages` (le workflow créera/publiera cette branche automatiquement après le build du frontend).
+- GHCR (GitHub Container Registry) : le workflow utilise `GITHUB_TOKEN` pour se connecter à `ghcr.io`. Assurez-vous que l'action a la permission `packages: write` (définie dans le workflow). Si vous préférez utiliser un PAT, créez un secret `CR_PAT` et remplacez `secrets.GITHUB_TOKEN` par `secrets.CR_PAT` dans le workflow.
+
+Si vous voulez que je :
+
+- crée une release automatique, je peux ajouter un workflow `release`.
+- configure un domaine personnalisé pour GitHub Pages, dites-moi le domaine et je gère la config.
+

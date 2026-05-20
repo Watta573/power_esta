@@ -51,10 +51,10 @@ function HistoriqueCard({ d }: { d: DiffusionGroupee }) {
       </div>
       <p className="text-sm text-text-2 line-clamp-2">{d.message}</p>
       <div className="flex flex-wrap gap-3 text-xs text-text-3">
-        <span>👥 {d.nbDestinataires} destinataire(s)</span>
-        <span>🏷️ {d.rolesCibles}</span>
-        <span>📅 {new Date(d.statut === "PLANIFIE" && d.dateEnvoiProgramme ? d.dateEnvoiProgramme : d.dateEnvoi).toLocaleString("fr-FR")}</span>
-        {d.expediteur && <span>✉️ {d.expediteur.prenom} {d.expediteur.nom}</span>}
+        <span>{d.nbDestinataires} destinataire(s)</span>
+        <span>{d.rolesCibles}</span>
+        <span>{new Date(d.statut === "PLANIFIE" && d.dateEnvoiProgramme ? d.dateEnvoiProgramme : d.dateEnvoi).toLocaleString("fr-FR")}</span>
+        {d.expediteur && <span>{d.expediteur.prenom} {d.expediteur.nom}</span>}
       </div>
     </div>
   );

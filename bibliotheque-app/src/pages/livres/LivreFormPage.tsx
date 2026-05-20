@@ -69,12 +69,14 @@ export default function LivreFormPage() {
     queryKey: ["langues"],
     queryFn: () => languesApi.getAll().then((r) => r.data),
   });
-  const { register, handleSubmit, formState, reset } = useForm<LivreForm>({
+  const { register, handleSubmit, formState, reset, setValue, watch } = useForm<LivreForm>({
     resolver: zodResolver(livreSchema),
+    defaultValues: { disponible: false },
   });
 
   useEffect(() => {
     if (livreExistant) {
+      const firstLangueId = livreExistant.langueIds?.[0];
       reset({
         titre: livreExistant.titre,
         auteur: livreExistant.auteur,
@@ -83,8 +85,9 @@ export default function LivreFormPage() {
         edition: livreExistant.edition,
         anneePublication: livreExistant.anneePublication,
         categorieId: livreExistant.categorie?.id,
-        langue: livreExistant.langue,
+        langue: firstLangueId ? String(firstLangueId) : "",
         description: livreExistant.description,
+        disponible: livreExistant.nombreDisponibles > 0,
       });
       if (livreExistant.couverture) {
         setCouverturePreview(couvertureUrl(livreExistant.couverture));
@@ -94,19 +97,7 @@ export default function LivreFormPage() {
 
   const mutation = useMutation({
     mutationFn: (values: LivreForm) => {
-      if (isEdit) {
-        return livresApi.update(livreId, {
-          titre: values.titre,
-          auteur: values.auteur,
-          isbn: values.isbn,
-          editeur: values.editeur,
-          edition: values.edition,
-          anneePublication: values.anneePublication,
-          categorie: { id: values.categorieId } as any,
-          langue: values.langue,
-          description: values.description,
-        });
-      }
+      // construire un FormData (le backend attend des ids pour 'langueIds')
       const formData = new FormData();
       formData.append("titre", values.titre);
       formData.append("isbn", values.isbn);
@@ -115,15 +106,22 @@ export default function LivreFormPage() {
       formData.append("edition", values.edition);
       formData.append("anneePublication", String(values.anneePublication));
       formData.append("categorieId", String(values.categorieId));
-      formData.append("langue", values.langue);
+      if (values.langue) formData.append("langueIds", String(values.langue));
       formData.append("description", values.description);
       if (values.nombrePages) formData.append("nombrePages", String(values.nombrePages));
       if (values.nombreExemplaires) formData.append("nombreExemplaires", String(values.nombreExemplaires));
+      formData.append("disponible", String(values.disponible ?? false));
       if (couvertureFile) formData.append("couverture", couvertureFile);
+      if (isEdit) {
+        return livresApi.update(livreId, formData);
+      }
       return livresApi.create(formData);
     },
     onSuccess: () => {
-      queryClient.removeQueries({ queryKey: ["livres"] });
+      queryClient.invalidateQueries({ queryKey: ["livres"] });
+      if (isEdit && Number.isFinite(livreId)) {
+        queryClient.invalidateQueries({ queryKey: ["livre", livreId] });
+      }
       toast.success(isEdit ? "Livre modifié avec succès" : "Livre ajouté avec succès");
       navigate(isEdit ? `/livres/${livreId}` : "/livres");
     },
@@ -159,12 +157,39 @@ export default function LivreFormPage() {
           max={100}
           className="h-11 rounded-md border border-border px-3"
         />
-        {!isEdit && (
-          <label className="flex h-11 items-center gap-3 rounded-md border border-border px-3">
-            <input type="checkbox" {...register("disponible")} className="h-4 w-4 accent-primary" />
-            <span className="text-sm text-text-2">{tf.disponibleCreation}</span>
-          </label>
-        )}
+        <div className="space-y-2 rounded-md border border-border p-3 md:col-span-2">
+          <div className="flex items-start justify-between">
+            <div className="text-sm font-medium text-text-1">{tf.disponibilite}</div>
+            {isEdit && <span className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">{isEdit ? "Mode modification" : "Nouveau"}</span>}
+          </div>
+          {isEdit && <p className="text-xs text-text-3">Définit la disponibilité des nouveaux exemplaires si vous en ajoutez</p>}
+          <div className="grid w-full grid-cols-2 gap-3">
+            <label className="rounded-md border border-border p-3 hover:border-primary transition">
+              <div className="text-sm font-semibold text-text-1">{tf.disponible}</div>
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={watch("disponible") === true}
+                  onChange={() => setValue("disponible", true)}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span className="text-sm text-text-2">Livres disponibles</span>
+              </div>
+            </label>
+            <label className="rounded-md border border-border p-3 hover:border-primary transition">
+              <div className="text-sm font-semibold text-text-1">{tf.indisponible}</div>
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={watch("disponible") === false}
+                  onChange={() => setValue("disponible", false)}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span className="text-sm text-text-2">Livres indisponibles</span>
+              </div>
+            </label>
+          </div>
+        </div>
         <select {...register("categorieId", { valueAsNumber: true })} className="h-11 rounded-md border border-border px-3">
           <option value={0}>{tf.choisirCategorie}</option>
           {(categories ?? []).map((c) => (
@@ -176,7 +201,7 @@ export default function LivreFormPage() {
         <select {...register("langue")} className="h-11 rounded-md border border-border px-3">
           <option value="">{tf.choisirLangue}</option>
           {(langues ?? []).map((l) => (
-            <option key={l.id} value={l.nom}>{l.nom}</option>
+            <option key={l.id} value={String(l.id)}>{l.nom}</option>
           ))}
         </select>
       </div>

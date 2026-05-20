@@ -3,6 +3,8 @@ package com.biblioteca.controller.api;
 import com.biblioteca.dto.api.PageResponseDto;
 import com.biblioteca.entity.NumeroPeriodique;
 import com.biblioteca.entity.Periodique;
+import com.biblioteca.entity.enums.StatutNumeroPeriodique;
+import com.biblioteca.entity.enums.TypePeriodique;
 import com.biblioteca.exception.BusinessException;
 import com.biblioteca.repository.NumeroPeriodiqueRepository;
 import com.biblioteca.repository.PeriodiqueRepository;
@@ -36,16 +38,19 @@ public class PeriodiqueApiController {
 
   public record PeriodiqueDto(Long id, String titre, String issn, String editeur,
                                String langue, String frequence, String description,
-                               String couverture, boolean actif, String dateAjout) {}
+                               String couverture, String type, String accesNumerique,
+                               String licenceAcces, boolean actif, String dateAjout) {}
 
   public record NumeroDto(Long id, Long periodiqueId, String titrePeriodique,
                            String volume, String numero, String dateParution,
-                           boolean disponible, String localisation, String notes) {}
+                           boolean disponible, String statut, String localisation,
+                           String notes, String dateReception) {}
 
   public record PeriodiqueRequest(
       @NotBlank String titre,
       String issn, String editeur, String langue, String frequence,
-      String description, String couverture) {}
+      String description, String couverture, String type,
+      String accesNumerique, String licenceAcces) {}
 
   public record NumeroRequest(
       @NotNull Long periodiqueId,
@@ -53,6 +58,7 @@ public class PeriodiqueApiController {
       @NotBlank String numero,
       @NotNull String dateParution,
       boolean disponible,
+      String statut,
       String localisation, String notes) {}
 
   // ─── Périodiques ─────────────────────────────────────────────────────────
@@ -82,6 +88,9 @@ public class PeriodiqueApiController {
         .titre(req.titre()).issn(req.issn()).editeur(req.editeur())
         .langue(req.langue()).frequence(req.frequence())
         .description(req.description()).couverture(req.couverture())
+        .type(parsePeriodiqueType(req.type()))
+        .accesNumerique(req.accesNumerique())
+        .licenceAcces(req.licenceAcces())
         .build();
     return ResponseEntity.status(HttpStatus.CREATED).body(toDto(periodiqueRepo.save(p)));
   }
@@ -94,6 +103,11 @@ public class PeriodiqueApiController {
     p.setTitre(req.titre()); p.setIssn(req.issn()); p.setEditeur(req.editeur());
     p.setLangue(req.langue()); p.setFrequence(req.frequence());
     p.setDescription(req.description()); p.setCouverture(req.couverture());
+    if (req.type() != null && !req.type().isBlank()) {
+      p.setType(parsePeriodiqueType(req.type()));
+    }
+    p.setAccesNumerique(req.accesNumerique());
+    p.setLicenceAcces(req.licenceAcces());
     return toDto(periodiqueRepo.save(p));
   }
 
@@ -128,6 +142,7 @@ public class PeriodiqueApiController {
     NumeroPeriodique n = NumeroPeriodique.builder()
         .periodique(p).volume(req.volume()).numero(req.numero())
         .dateParution(LocalDate.parse(req.dateParution()))
+        .statut(parseNumeroStatut(req.statut()))
         .disponible(req.disponible()).localisation(req.localisation()).notes(req.notes())
         .build();
     return ResponseEntity.status(HttpStatus.CREATED).body(toNumeroDto(numeroRepo.save(n)));
@@ -140,6 +155,9 @@ public class PeriodiqueApiController {
         .orElseThrow(() -> new BusinessException("Numéro introuvable"));
     n.setVolume(req.volume()); n.setNumero(req.numero());
     n.setDateParution(LocalDate.parse(req.dateParution()));
+    if (req.statut() != null && !req.statut().isBlank()) {
+      n.setStatut(parseNumeroStatut(req.statut()));
+    }
     n.setDisponible(req.disponible()); n.setLocalisation(req.localisation()); n.setNotes(req.notes());
     return toNumeroDto(numeroRepo.save(n));
   }
@@ -151,11 +169,34 @@ public class PeriodiqueApiController {
     return ResponseEntity.noContent().build();
   }
 
+  @PutMapping("/numeros/{numeroId}/reception")
+  @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE')")
+  public NumeroDto marquerNumeroRecu(@PathVariable Long numeroId) {
+    NumeroPeriodique n = numeroRepo.findById(numeroId)
+        .orElseThrow(() -> new BusinessException("Numéro introuvable"));
+    n.setStatut(StatutNumeroPeriodique.RECU);
+    n.setDateReception(LocalDate.now());
+    n.setDisponible(true);
+    return toNumeroDto(numeroRepo.save(n));
+  }
+
+  @PutMapping("/numeros/{numeroId}/manquant")
+  @PreAuthorize("hasAnyRole('ADMIN','BIBLIOTHECAIRE')")
+  public NumeroDto marquerNumeroManquant(@PathVariable Long numeroId) {
+    NumeroPeriodique n = numeroRepo.findById(numeroId)
+        .orElseThrow(() -> new BusinessException("Numéro introuvable"));
+    n.setStatut(StatutNumeroPeriodique.MANQUANT);
+    n.setDisponible(false);
+    return toNumeroDto(numeroRepo.save(n));
+  }
+
   // ─── Mappers ─────────────────────────────────────────────────────────────
 
   private PeriodiqueDto toDto(Periodique p) {
     return new PeriodiqueDto(p.getId(), p.getTitre(), p.getIssn(), p.getEditeur(),
         p.getLangue(), p.getFrequence(), p.getDescription(), p.getCouverture(),
+        p.getType() != null ? p.getType().name() : null,
+        p.getAccesNumerique(), p.getLicenceAcces(),
         Boolean.TRUE.equals(p.getActif()),
         p.getDateAjout() != null ? p.getDateAjout().toString() : null);
   }
@@ -165,6 +206,27 @@ public class PeriodiqueApiController {
         n.getPeriodique().getId(), n.getPeriodique().getTitre(),
         n.getVolume(), n.getNumero(),
         n.getDateParution() != null ? n.getDateParution().toString() : null,
-        Boolean.TRUE.equals(n.getDisponible()), n.getLocalisation(), n.getNotes());
+        Boolean.TRUE.equals(n.getDisponible()),
+        n.getStatut() != null ? n.getStatut().name() : null,
+        n.getLocalisation(), n.getNotes(),
+        n.getDateReception() != null ? n.getDateReception().toString() : null);
+  }
+
+  private StatutNumeroPeriodique parseNumeroStatut(String statut) {
+    if (statut == null || statut.isBlank()) return StatutNumeroPeriodique.ATTENDU;
+    try {
+      return StatutNumeroPeriodique.valueOf(statut.trim().toUpperCase());
+    } catch (IllegalArgumentException ex) {
+      throw new BusinessException("Statut de numéro invalide : " + statut);
+    }
+  }
+
+  private TypePeriodique parsePeriodiqueType(String type) {
+    if (type == null || type.isBlank()) return TypePeriodique.PHYSIQUE;
+    try {
+      return TypePeriodique.valueOf(type.trim().toUpperCase());
+    } catch (IllegalArgumentException ex) {
+      throw new BusinessException("Type de périodique invalide : " + type);
+    }
   }
 }

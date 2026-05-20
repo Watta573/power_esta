@@ -1,5 +1,6 @@
 package com.biblioteca.entity;
 
+import com.biblioteca.entity.enums.TypePeriodique;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import lombok.*;
@@ -34,6 +35,16 @@ public class Periodique {
   @Column(length = 255)
   private String couverture;
 
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private TypePeriodique type;
+
+  @Column(name = "acces_numerique", length = 255)
+  private String accesNumerique;
+
+  @Column(name = "licence_acces", length = 255)
+  private String licenceAcces;
+
   @Column(nullable = false)
   private Boolean actif;
 
@@ -42,6 +53,7 @@ public class Periodique {
 
   @PrePersist
   void prePersist() {
+    if (type == null) type = TypePeriodique.PHYSIQUE;
     if (actif == null) actif = true;
     if (dateAjout == null) dateAjout = LocalDate.now();
   }

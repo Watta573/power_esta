@@ -48,7 +48,7 @@ public class AdminLivreController {
 
   @GetMapping("/nouveau")
   public String createForm(Model model) {
-    model.addAttribute("form", new LivreSaveRequest("", "", "", "", "", null, null, null, "", null, null));
+    model.addAttribute("form", new LivreSaveRequest("", "", "", "", "", null, null, null, "", null, null, false));
     model.addAttribute("categories", categorieRepository.findAll());
     return "admin/livres/form";
   }
@@ -84,6 +84,7 @@ public class AdminLivreController {
         livre.getLangues() != null ? livre.getLangues().stream().map(l -> l.getId()).toList() : null,
         livre.getDescription(),
         livre.getNombrePages(),
+        null,
         null
     ));
     model.addAttribute("exemplaires", livreService.listerExemplaires(id));
