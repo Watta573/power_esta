@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { User, Mail, Phone, Key, Lock, BookOpen, AlertTriangle, Pencil, X, Check, Printer, ShieldCheck, QrCode, Bell, Download } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -40,6 +40,9 @@ export default function ProfilPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [totp2faData, setTotp2faData] = useState<{ secret: string; otpAuthUrl: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openPhotoPicker = () => fileInputRef.current?.click();
 
   const { data: me, isLoading } = useQuery({
     queryKey: ["me"],
@@ -132,6 +135,7 @@ export default function ProfilPage() {
         <div className="mb-6 flex items-center gap-4">
           <label className="relative cursor-pointer group">
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp"
               className="hidden"
@@ -156,11 +160,20 @@ export default function ProfilPage() {
               </div>
             </div>
           </label>
-          <div>
-            <p className="text-xl font-semibold text-gray-900">{profile?.prenom} {profile?.nom}</p>
-            <span className="inline-block rounded-full bg-blue-100 px-3 py-0.5 text-xs font-medium text-blue-700">
-              {ROLE_LABELS[profile?.role ?? ""] ?? profile?.role}
-            </span>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xl font-semibold text-gray-900">{profile?.prenom} {profile?.nom}</p>
+              <span className="inline-block rounded-full bg-blue-100 px-3 py-0.5 text-xs font-medium text-blue-700">
+                {ROLE_LABELS[profile?.role ?? ""] ?? profile?.role}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={openPhotoPicker}
+              className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Importer depuis la galerie
+            </button>
           </div>
           {!editing && (
             <button

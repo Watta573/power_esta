@@ -240,14 +240,11 @@ export default function CataloguePage() {
                         </Link>
                       ) : (
                         <button
-                          onClick={() => livre.nombreDisponibles > 0
-                            ? navigate("/emprunts/nouveau")
-                            : reserverMutation.mutate(livre.id)
-                          }
+                          onClick={() => reserverMutation.mutate(livre.id)}
                           disabled={reserverMutation.isPending}
                           className="rounded-md bg-primary px-3 py-1 text-sm text-white disabled:opacity-60"
                         >
-                          {livre.nombreDisponibles > 0 ? t.livres.emprunter : t.livres.reserver}
+                          {t.livres.reserver}
                         </button>
                       )}
                       {canWishlist && utilisateur && (

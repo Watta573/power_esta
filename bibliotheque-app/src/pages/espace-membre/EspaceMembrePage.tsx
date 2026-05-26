@@ -1,9 +1,11 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faIdCard, faClockRotateLeft, faTriangleExclamation, faChartPie,
-  faHeart, faBell, faBookmark, faPlus, faTrash, faGlobe, faLock,
+  faHeart, faBell, faPlus, faTrash, faGlobe, faLock,
   faStar, faCheckCircle, faExclamationCircle, faSpinner, faMagnifyingGlass, faXmark,
+  faShoppingCart, faCreditCard, faLayerGroup, faPrint, faLink,
 } from "@fortawesome/free-solid-svg-icons";
+import { faStar as faStarEmpty } from "@fortawesome/free-regular-svg-icons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth.store";
@@ -17,8 +19,131 @@ import {
 } from "@/hooks/useEspaceMembre";
 import { couvertureUrl } from "@/lib/imageUrl";
 import { useLivres } from "@/hooks/useLivres";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { acquisitionsApi } from "@/api/acquisitions.api";
+import { cotisationsApi } from "@/api/cotisations.api";
+import { toast } from "sonner";
+import { empruntsApi } from "@/api/emprunts.api";
+import { imprimerRecuEmprunt } from "@/utils/exportPDF";
 
-type Tab = "carte" | "historique" | "amendes" | "stats" | "wishlist" | "alertes" | "listes";
+type Tab = "carte" | "historique" | "amendes" | "stats" | "wishlist" | "alertes" | "listes" | "suggestions" | "quota";
+
+function AmendeLigneRow({ amende, onPaid }: { amende: { empruntId: number; titre: string; montant: number; joursRetard: number; dateRetourPrevue: string }; onPaid: () => void }) {
+  const payer = useMutation({
+    mutationFn: () => empruntsApi.payerAmende(amende.empruntId),
+    onSuccess: () => { toast.success("Amende marquée comme payée !"); onPaid(); },
+    onError: () => toast.error("Erreur lors du paiement"),
+  });
+  return (
+    <tr className="hover:bg-surface-2/50">
+      <td className="px-4 py-3 font-medium">{amende.titre}</td>
+      <td className="px-4 py-3 text-text-2">{new Date(amende.dateRetourPrevue).toLocaleDateString()}</td>
+      <td className="px-4 py-3 text-red-600 font-semibold">{amende.joursRetard}j</td>
+      <td className="px-4 py-3 text-red-600 font-bold">{amende.montant} FCFA</td>
+      <td className="px-4 py-3">
+        <button onClick={() => payer.mutate()} disabled={payer.isPending}
+          className="flex items-center gap-1.5 rounded-lg border border-primary px-2.5 py-1 text-xs text-primary hover:bg-primary/5 disabled:opacity-50">
+          <FontAwesomeIcon icon={faCreditCard} style={{ fontSize: 11 }} />
+          {payer.isPending ? "..." : "Payer"}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function SuggestionAchatTab({ uid }: { uid: number }) {
+  const qc = useQueryClient();
+  const [titre, setTitre] = useState("");
+  const [auteur, setAuteur] = useState("");
+  const [isbn, setIsbn] = useState("");
+  const [justification, setJustification] = useState("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["mes-suggestions", uid],
+    queryFn: () => acquisitionsApi.getSuggestions({ demandeurId: uid, size: 20 }).then((r) => r.data),
+    enabled: !!uid,
+  });
+
+  const creer = useMutation({
+    mutationFn: () => acquisitionsApi.creerSuggestion({ titre, auteur: auteur || undefined, isbn: isbn || undefined, justification: justification || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mes-suggestions", uid] });
+      toast.success("Suggestion envoyée !");
+      setTitre(""); setAuteur(""); setIsbn(""); setJustification("");
+    },
+    onError: () => toast.error("Erreur lors de l'envoi"),
+  });
+
+  const STATUT_COLORS: Record<string, string> = {
+    EN_ATTENTE: "bg-yellow-100 text-yellow-700",
+    APPROUVE:   "bg-green-100 text-green-700",
+    REJETE:     "bg-red-100 text-red-700",
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-border bg-white p-5 shadow-soft space-y-4">
+        <h3 className="font-semibold">Proposer un livre à l'achat</h3>
+        <p className="text-sm text-text-3">Vous ne trouvez pas un livre dans notre catalogue ? Soumettez une suggestion, la bibliothèque l'étudiera.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-xs font-medium text-text-2">Titre <span className="text-danger">*</span></label>
+            <input value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Titre du livre"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-text-2">Auteur</label>
+            <input value={auteur} onChange={(e) => setAuteur(e.target.value)} placeholder="Nom de l'auteur"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-text-2">ISBN</label>
+            <input value={isbn} onChange={(e) => setIsbn(e.target.value)} placeholder="ISBN (optionnel)"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-xs font-medium text-text-2">Justification</label>
+            <textarea rows={2} value={justification} onChange={(e) => setJustification(e.target.value)}
+              placeholder="Pourquoi ce livre serait utile pour la bibliothèque..."
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+          </div>
+        </div>
+        <button
+          disabled={!titre.trim() || creer.isPending}
+          onClick={() => creer.mutate()}
+          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+          <FontAwesomeIcon icon={faPlus} style={{ fontSize: 12 }} />
+          {creer.isPending ? "Envoi..." : "Soumettre la suggestion"}
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="font-semibold text-sm text-text-2">Mes suggestions</h3>
+        {isLoading ? (
+          <div className="flex h-20 items-center justify-center">
+            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-primary" />
+          </div>
+        ) : (data?.content ?? []).length === 0 ? (
+          <p className="rounded-xl border border-border bg-white px-4 py-6 text-center text-sm text-text-3">Aucune suggestion soumise.</p>
+        ) : (data?.content ?? []).map((s) => (
+          <div key={s.id} className="rounded-xl border border-border bg-white p-4 shadow-soft">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-medium text-sm">{s.titre}</p>
+                {s.auteur && <p className="text-xs text-text-3">{s.auteur}</p>}
+                {s.justification && <p className="mt-1 text-xs text-text-2 line-clamp-2">{s.justification}</p>}
+              </div>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUT_COLORS[s.statut] ?? "bg-gray-100 text-gray-600"}`}>
+                {s.statut === "EN_ATTENTE" ? "En attente" : s.statut === "APPROUVE" ? "Approuvée" : "Rejetée"}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-text-3">{new Date(s.dateDemande).toLocaleDateString("fr-FR")}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function EspaceMembrePage() {
   const t = useT();
@@ -27,6 +152,7 @@ export default function EspaceMembrePage() {
   const isEnseignant = utilisateur?.role === "ENSEIGNANT";
   const [tab, setTab] = useState<Tab>("carte");
   const [histPage, setHistPage] = useState(0);
+  const queryClient = useQueryClient();
 
   const { data: carte,      isLoading: loadingCarte }    = useCarteMembre(uid);
   const { data: historique, isLoading: loadingHist }     = useHistoriqueEmprunts(uid, histPage);
@@ -35,6 +161,25 @@ export default function EspaceMembrePage() {
   const { data: wishlist,   isLoading: loadingWishlist } = useWishlist(uid);
   const { data: alertes,    isLoading: loadingAlertes }  = useAlertes(uid);
   const { data: mesListes,  isLoading: loadingListes }   = useMesListes(isEnseignant ? uid : undefined);
+
+  // Quota emprunts
+  const { data: empruntsEnCours } = useQuery({
+    queryKey: ["emprunts-encours-quota", uid],
+    queryFn: () => empruntsApi.getAll({ utilisateurId: uid, statut: "EN_COURS", size: 1 }).then((r) => r.data),
+    enabled: !!uid,
+  });
+  const quotaMax = utilisateur?.role === "ENSEIGNANT" ? 5 : utilisateur?.role === "ETUDIANT" ? 3 : 1;
+  const quotaUtilise = empruntsEnCours?.totalElements ?? 0;
+
+  // Cotisation active
+  const { data: cotisationActive } = useQuery({
+    queryKey: ["cotisation-active", uid],
+    queryFn: () => cotisationsApi.getCotisationActive(uid!).then((r) => r.data),
+    enabled: !!uid,
+  });
+  const joursRestantsCotisation = cotisationActive?.dateFin
+    ? Math.ceil((new Date(cotisationActive.dateFin).getTime() - Date.now()) / 86400000)
+    : null;
 
   const toggleWishlist = useToggleWishlist();
   const supprimerAlerte = useSupprimerAlerte();
@@ -68,13 +213,15 @@ export default function EspaceMembrePage() {
   } as any);
 
   const tabs: { key: Tab; label: string; icon: any; enseignantOnly?: boolean }[] = [
-    { key: "carte",      label: em.carteMembre    ?? "Carte membre",       icon: faIdCard },
-    { key: "historique", label: em.historique     ?? "Historique",         icon: faClockRotateLeft },
-    { key: "amendes",    label: em.amendes        ?? "Amendes",            icon: faTriangleExclamation },
-    { key: "stats",      label: em.statistiques   ?? "Statistiques",       icon: faChartPie },
-    { key: "wishlist",   label: em.wishlist       ?? "Liste de souhaits",  icon: faHeart },
-    { key: "alertes",    label: em.alertes        ?? "Alertes",            icon: faBell },
-    { key: "listes",     label: em.listesLecture  ?? "Listes de lecture",  icon: faBookmark, enseignantOnly: true },
+    { key: "carte",       label: em.carteMembre    ?? "Carte membre",       icon: faIdCard },
+    { key: "quota",       label: "Mes emprunts",                            icon: faLayerGroup },
+    { key: "historique",  label: em.historique     ?? "Historique",         icon: faClockRotateLeft },
+    { key: "amendes",     label: em.amendes        ?? "Amendes",            icon: faTriangleExclamation },
+    { key: "stats",       label: em.statistiques   ?? "Statistiques",       icon: faChartPie },
+    { key: "wishlist",    label: em.wishlist       ?? "Liste de souhaits",  icon: faHeart },
+    { key: "alertes",     label: em.alertes        ?? "Alertes",            icon: faBell },
+    { key: "suggestions", label: "Suggestions d'achat",                     icon: faShoppingCart },
+    { key: "listes",      label: em.listesLecture  ?? "Listes de lecture",  icon: faStar, enseignantOnly: true },
   ];
 
   const visibleTabs = tabs.filter((tb) => !tb.enseignantOnly || isEnseignant);
@@ -93,6 +240,8 @@ export default function EspaceMembrePage() {
     wishlist: loadingWishlist,
     alertes: loadingAlertes,
     listes: loadingListes,
+    suggestions: false,
+    quota: false,
   };
 
   return (
@@ -173,7 +322,7 @@ export default function EspaceMembrePage() {
           <table className="w-full text-sm">
             <thead className="bg-surface-2 text-text-2">
               <tr>
-                {[em.titre2 ?? "Titre", em.dateEmprunt ?? "Emprunt", em.dateRetour ?? "Retour prévu", em.statut ?? "Statut", em.amende ?? "Amende"].map((h) => (
+                {[em.titre2 ?? "Titre", em.dateEmprunt ?? "Emprunt", em.dateRetour ?? "Retour prévu", em.statut ?? "Statut", em.amende ?? "Amende", "Reçu"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
                 ))}
               </tr>
@@ -190,10 +339,18 @@ export default function EspaceMembrePage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">{e.amende > 0 ? <span className="text-red-600 font-semibold">{e.amende} FCFA</span> : "—"}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => imprimerRecuEmprunt(e as any, utilisateur)}
+                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-text-2 hover:bg-surface"
+                    >
+                      <FontAwesomeIcon icon={faPrint} style={{ fontSize: 10 }} /> Reçu
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!historique?.content?.length && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-text-2">{em.aucunHistorique ?? "Aucun historique"}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-text-2">{em.aucunHistorique ?? "Aucun historique"}</td></tr>
               )}
             </tbody>
           </table>
@@ -205,6 +362,90 @@ export default function EspaceMembrePage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Quota emprunts ── */}
+      {tab === "quota" && (
+        <div className="space-y-4">
+          {/* Barre de quota */}
+          <div className="rounded-xl border border-border bg-white p-6 shadow-soft space-y-4">
+            <h3 className="font-semibold">Quota d'emprunts</h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-text-2">{quotaUtilise} emprunt{quotaUtilise > 1 ? "s" : ""} en cours</span>
+                <span className={`font-bold ${quotaUtilise >= quotaMax ? "text-danger" : "text-primary"}`}>
+                  {quotaUtilise} / {quotaMax}
+                </span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-surface-2 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${quotaUtilise >= quotaMax ? "bg-danger" : quotaUtilise >= quotaMax * 0.7 ? "bg-warning" : "bg-primary"}`}
+                  style={{ width: `${Math.min(100, (quotaUtilise / quotaMax) * 100)}%` }}
+                />
+              </div>
+              {quotaUtilise >= quotaMax && (
+                <p className="text-xs text-danger">Quota atteint. Retournez un livre pour pouvoir en emprunter un nouveau.</p>
+              )}
+            </div>
+
+            {/* Cotisation */}
+            {cotisationActive !== undefined && (
+              <div className={`rounded-lg border p-3 ${
+                !cotisationActive?.active ? "border-danger/30 bg-danger/5"
+                : joursRestantsCotisation !== null && joursRestantsCotisation <= 30 ? "border-warning/30 bg-warning/5"
+                : "border-success/30 bg-success/5"
+              }`}>
+                <p className="text-sm font-medium">
+                  {!cotisationActive?.active
+                    ? "Aucun abonnement actif"
+                    : joursRestantsCotisation !== null && joursRestantsCotisation <= 0
+                    ? "Abonnement expiré"
+                    : `Abonnement actif expire dans ${joursRestantsCotisation} jour${joursRestantsCotisation! > 1 ? "s" : ""}`
+                  }
+                </p>
+                {cotisationActive?.dateFin && (
+                  <p className="text-xs text-text-3 mt-0.5">Date d'expiration : {new Date(cotisationActive.dateFin).toLocaleDateString("fr-FR")}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Emprunts en cours */}
+          <div className="rounded-xl border border-border bg-white shadow-soft overflow-hidden">
+            <div className="border-b border-border px-4 py-3">
+              <h3 className="font-semibold">Emprunts en cours</h3>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-surface-2 text-text-2">
+                <tr>
+                  {["Titre", "Retour prévu", "Statut"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(empruntsEnCours?.content ?? []).length === 0 ? (
+                  <tr><td colSpan={3} className="px-4 py-6 text-center text-text-3">Aucun emprunt en cours</td></tr>
+                ) : (empruntsEnCours?.content ?? []).map((e) => (
+                  <tr key={e.id} className="hover:bg-surface">
+                    <td className="px-4 py-2.5 font-medium">{e.livre?.titre}</td>
+                    <td className="px-4 py-2.5 text-text-2">{e.dateRetourPrevue}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        e.statut === "EN_RETARD" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
+                      }`}>{e.statut}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Suggestions d'achat ── */}
+      {tab === "suggestions" && (
+        <SuggestionAchatTab uid={uid!} />
       )}
 
       {/* ── Amendes ── */}
@@ -223,22 +464,17 @@ export default function EspaceMembrePage() {
             <table className="w-full text-sm">
               <thead className="bg-surface-2 text-text-2">
                 <tr>
-                  {[em.titre2 ?? "Titre", em.retourPrevu ?? "Retour prévu", em.joursRetard ?? "Jours retard", em.montant ?? "Montant"].map((h) => (
+                  {[em.titre2 ?? "Titre", em.retourPrevu ?? "Retour prévu", em.joursRetard ?? "Jours retard", em.montant ?? "Montant", "Action"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {(amendes?.amendesEnCours ?? []).map((a) => (
-                  <tr key={a.empruntId} className="hover:bg-surface-2/50">
-                    <td className="px-4 py-3 font-medium">{a.titre}</td>
-                    <td className="px-4 py-3 text-text-2">{new Date(a.dateRetourPrevue).toLocaleDateString()}</td>
-                    <td className="px-4 py-3 text-red-600 font-semibold">{a.joursRetard}j</td>
-                    <td className="px-4 py-3 text-red-600 font-bold">{a.montant} FCFA</td>
-                  </tr>
+                  <AmendeLigneRow key={a.empruntId} amende={a} onPaid={() => queryClient.invalidateQueries({ queryKey: ["amendes-utilisateur"] })} />
                 ))}
                 {!amendes?.amendesEnCours?.length && (
-                  <tr><td colSpan={4} className="px-4 py-8 text-center text-text-2">{em.aucuneAmende ?? "Aucune amende en cours"}</td></tr>
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-text-2">{em.aucuneAmende ?? "Aucune amende en cours"}</td></tr>
                 )}
               </tbody>
             </table>
@@ -307,7 +543,7 @@ export default function EspaceMembrePage() {
                   <div className="h-20 w-14 shrink-0 overflow-hidden rounded-md bg-surface-2">
                     {item.livre.couverture
                       ? <img src={couvertureUrl(item.livre.couverture) ?? ""} alt={item.livre.titre} className="h-full w-full object-cover" />
-                      : <div className="grid h-full place-items-center text-text-3"><FontAwesomeIcon icon={faBookmark} /></div>
+                      : <div className="grid h-full place-items-center text-text-3"><FontAwesomeIcon icon={faHeart} style={{ fontSize: 16 }} /></div>
                     }
                   </div>
                   <div className="flex-1 min-w-0">
@@ -456,6 +692,14 @@ export default function EspaceMembrePage() {
                       <FontAwesomeIcon icon={liste.publique ? faGlobe : faLock} style={{ fontSize: 10 }} className="mr-1" />
                       {liste.publique ? (em.publique ?? "Publique") : (em.privee ?? "Privée")}
                     </span>
+                    {liste.publique && (
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/listes/${liste.id}`); toast.success("Lien copié !"); }}
+                        className="text-text-3 hover:text-primary transition-colors" title="Copier le lien"
+                      >
+                        <FontAwesomeIcon icon={faLink} style={{ fontSize: 12 }} />
+                      </button>
+                    )}
                     <button
                       onClick={() => supprimerListe.mutate(liste.id)}
                       className="text-text-3 hover:text-danger transition-colors"
@@ -557,10 +801,7 @@ export default function EspaceMembrePage() {
         </div>
       )}
 
-      {/* Note étoiles déco */}
-      <div className="flex justify-center gap-1 pt-2 opacity-20">
-        {[1,2,3,4,5].map((i) => <FontAwesomeIcon key={i} icon={faStar} className="text-yellow-400" style={{ fontSize: 10 }} />)}
-      </div>
+
     </section>
   );
 }

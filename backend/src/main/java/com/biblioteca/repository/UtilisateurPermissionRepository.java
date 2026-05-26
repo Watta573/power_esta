@@ -17,6 +17,9 @@ public interface UtilisateurPermissionRepository extends JpaRepository<Utilisate
     
     @Query("SELECT up.permission.code FROM UtilisateurPermission up WHERE up.utilisateur.id = :utilisateurId AND up.accorde = true")
     List<String> findPermissionCodesByUtilisateurId(@Param("utilisateurId") Long utilisateurId);
+
+    @Query("SELECT up FROM UtilisateurPermission up JOIN FETCH up.permission WHERE up.utilisateur.id = :utilisateurId")
+    List<UtilisateurPermission> findAllByUtilisateurIdWithPermission(@Param("utilisateurId") Long utilisateurId);
     
     Optional<UtilisateurPermission> findByUtilisateurIdAndPermissionId(Long utilisateurId, Long permissionId);
     

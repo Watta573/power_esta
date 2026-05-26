@@ -28,6 +28,10 @@ export function useAccorderPermission() {
       permissionsApi.accorderPermission(utilisateurId, request),
     onSuccess: (_, { utilisateurId }) => {
       queryClient.invalidateQueries({ queryKey: ['user-permissions', utilisateurId] });
+      queryClient.refetchQueries({ queryKey: ['user-permissions', utilisateurId] });
+    },
+    onError: (e: any) => {
+      console.error('Erreur accorder permission:', e?.response?.data ?? e.message);
     },
   });
 }
@@ -41,6 +45,10 @@ export function useRevoquerPermission() {
       permissionsApi.revoquerPermission(utilisateurId, request),
     onSuccess: (_, { utilisateurId }) => {
       queryClient.invalidateQueries({ queryKey: ['user-permissions', utilisateurId] });
+      queryClient.refetchQueries({ queryKey: ['user-permissions', utilisateurId] });
+    },
+    onError: (e: any) => {
+      console.error('Erreur révoquer permission:', e?.response?.data ?? e.message);
     },
   });
 }

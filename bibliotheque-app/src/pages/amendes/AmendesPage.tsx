@@ -185,7 +185,7 @@ export default function AmendesPage() {
         )}
       </div>
 
-      {/* Modal détail */}
+      {/* Modele pour détail */}
       {detail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="relative w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl">

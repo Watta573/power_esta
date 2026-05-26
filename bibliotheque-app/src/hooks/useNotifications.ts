@@ -27,6 +27,7 @@ export function useLireNotification() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications-count"] });
+      queryClient.refetchQueries({ queryKey: ["notifications-count"] });
     },
   });
 }
@@ -38,6 +39,7 @@ export function useLireToutesNotifications() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications-count"] });
+      queryClient.refetchQueries({ queryKey: ["notifications-count"] });
     },
   });
 }

@@ -15,7 +15,7 @@ import { useEmprunts } from "@/hooks/useEmprunts";
 import StatusBadge from "@/components/shared/StatusBadge";
 import Pagination from "@/components/shared/Pagination";
 
-// ─── Barre de progression abonnement ─────────────────────────────────────
+// Barre de progression abonnement 
 
 function ProgressionAbonnement({ joursRestants, dureeMois }: { joursRestants: number; dureeMois: number }) {
   const pct = Math.max(0, Math.min(100, (joursRestants / (dureeMois * 30)) * 100));
@@ -39,7 +39,7 @@ function ProgressionAbonnement({ joursRestants, dureeMois }: { joursRestants: nu
   );
 }
 
-// ─── Modal souscription ───────────────────────────────────────────────────
+// Modele des souscriptions 
 
 type ModePaiement = "PRESENTIEL" | "CINETPAY";
 
@@ -214,7 +214,7 @@ function SouscrireModal({
         {/* Sélection formule + mode */}
         {!transactionId && (
           <>
-            {/* Body — formules */}
+            {/* Body du formulaire */}
             <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
               {formules.map((f) => (
                 <button
@@ -329,7 +329,7 @@ function SouscrireModal({
   );
 }
 
-// ─── Détail modal cotisation ──────────────────────────────────────────────
+// Détail modal cotisation 
 
 function DetailModal({ item, onClose }: { item: CotisationListItem; onClose: () => void }) {
   return (

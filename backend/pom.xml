@@ -15,7 +15,7 @@
   <artifactId>biblioteca</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <name>biblioteca</name>
-  <description>Application de gestion de bibliothèque universitaire (UML-Java 2025-2026)</description>
+  <description>Application de gestion de bibliothèque universitaire</description>
 
   <properties>
     <java.version>17</java.version>
@@ -41,7 +41,7 @@
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
 
-    <!-- Security -->
+    <!-- Securité -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
@@ -100,7 +100,7 @@
       <artifactId>spring-boot-starter-mail</artifactId>
     </dependency>
 
-    <!-- Export PDF/Excel -->
+    <!-- Exportation en PDF/Excel -->
     <dependency>
       <groupId>com.itextpdf</groupId>
       <artifactId>itextpdf</artifactId>

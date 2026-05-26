@@ -13,7 +13,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartBar, faBookOpen, faTriangleExclamation, faArrowTrendUp, faFileArrowDown, faPrint } from "@fortawesome/free-solid-svg-icons";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-type Tab = "activite" | "retards" | "popularite" | "inventaire" | "rotation";
+type Tab = "activite" | "retards" | "popularite" | "inventaire" | "rotation" | "dormants";
 
 const COLORS = ["#1B4332", "#2D6A4F", "#40916C", "#74C69D", "#95D5B2", "#B7E4C7"];
 
@@ -29,7 +29,11 @@ export default function RapportsPage() {
   });
 
   const { data: retards } = useEmprunts({ statut: "EN_RETARD", size: 100 });
-  const { data: livres } = useLivres({ page: 0, size: 100 });
+  const { data: livres } = useLivres({ page: 0, size: 200 });
+
+  // Livres jamais empruntés : ceux qui ne figurent pas dans topLivres
+  const livresActifsIds = new Set((stats?.topLivres ?? []).map((i) => i.livre.id));
+  const livresDormants = (livres?.content ?? []).filter((l) => !livresActifsIds.has(l.id));
 
   const topLivres = (stats?.topLivres ?? []).map((item) => ({ name: item.livre.titre.substring(0, 25), emprunts: item.nbEmprunts }));
   const empruntsParJour = (stats?.empruntsParJour ?? []).slice(-14).map((e) => ({ date: e.date.substring(5), count: e.count }));
@@ -51,6 +55,7 @@ export default function RapportsPage() {
     popularite: t.rapports.popularitePDF,
     rotation:   "Taux de rotation",
     inventaire: t.rapports.inventairePDF,
+    dormants:   "Livres jamais empruntés",
   };
 
   const exportPDF = () => {
@@ -155,6 +160,7 @@ export default function RapportsPage() {
           { id: "popularite", label: t.rapports.popularite      },
           { id: "rotation",   label: "Taux de rotation"         },
           { id: "inventaire", label: t.rapports.inventaire      },
+          { id: "dormants",   label: "Jamais empruntés"         },
         ] as const).map(({ id, label }) => (
           <button key={id} onClick={() => setTab(id)}
             className={`border-b-2 px-4 py-2.5 text-sm font-medium transition ${tab === id ? "border-primary text-primary" : "border-transparent text-text-2 hover:text-text-1"}`}>
@@ -345,6 +351,48 @@ export default function RapportsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tab === "dormants" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold">Livres jamais empruntés</h3>
+                <p className="text-xs text-text-3 mt-0.5">Ces livres n'ont aucun emprunt enregistré. Candidats au désherbage ou à la mise en valeur.</p>
+              </div>
+              <span className="rounded-full bg-warning/10 px-3 py-1 text-sm font-semibold text-warning">
+                {livresDormants.length} livre{livresDormants.length > 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-2 text-text-2">
+                <tr>{["Titre", "Auteur", "Catégorie", "Exemplaires", "Disponibles"].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {livresDormants.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-text-3">Tous les livres ont été empruntés au moins une fois.</td></tr>
+                ) : livresDormants.map((l) => (
+                  <tr key={l.id} className="hover:bg-surface">
+                    <td className="px-4 py-3 font-medium">{l.titre}</td>
+                    <td className="px-4 py-3 text-text-2">{l.auteur}</td>
+                    <td className="px-4 py-3">{l.categorie?.nom ?? "—"}</td>
+                    <td className="px-4 py-3 text-center">{l.nombreExemplaires}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={l.nombreDisponibles > 0 ? "text-success font-medium" : "text-danger"}>
+                        {l.nombreDisponibles}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

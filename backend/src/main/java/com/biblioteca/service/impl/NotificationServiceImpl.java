@@ -345,14 +345,29 @@ public class NotificationServiceImpl implements NotificationService {
 
   @Override
   @Transactional
-  @Scheduled(fixedDelay = 60_000) // toutes les minutes
+  @Scheduled(fixedDelay = 60_000)
   public int traiterDiffusionsProgrammees() {
     List<DiffusionGroupee> planifiees = diffusionGroupeeRepository
         .findByStatutAndDateEnvoiProgrammeBefore("PLANIFIE", LocalDateTime.now());
     for (DiffusionGroupee d : planifiees) {
       List<String> roles = List.of(d.getRolesCibles().split(","));
-      envoyerGroupee(roles, d.getSujet(), d.getMessage(), d.getType(), null,
-          d.getExpediteur() != null ? d.getExpediteur().getId() : null);
+      List<Role> roleEnums = roles.stream()
+          .map(r -> { try { return Role.valueOf(r); } catch (IllegalArgumentException ex) { return null; } })
+          .filter(Objects::nonNull)
+          .toList();
+      TypeNotification typeNotif;
+      try { typeNotif = TypeNotification.valueOf(d.getType()); }
+      catch (IllegalArgumentException e) { typeNotif = TypeNotification.NOUVEAU_LIVRE; }
+      final TypeNotification finalType = typeNotif;
+
+      List<Utilisateur> destinataires = utilisateurRepository.findAll().stream()
+          .filter(u -> roleEnums.contains(u.getRole()) && Boolean.TRUE.equals(u.getActif()))
+          .toList();
+      destinataires.forEach(u -> {
+        notifier(u, finalType, d.getMessage(), CanalNotification.INTERNE);
+        envoyerEmail(u.getEmail(), d.getSujet(), buildEmailGroupee(u, d.getMessage(), finalType));
+      });
+
       d.setStatut("ENVOYE");
       diffusionGroupeeRepository.save(d);
     }

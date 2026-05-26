@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { CheckCircle, BookOpen, Calendar, User, Hash, Search, X, ChevronDown } from "lucide-react";
+import { CheckCircle, BookOpen, Calendar, User, Hash, Search, X, ChevronDown, AlertTriangle } from "lucide-react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBarcode } from "@fortawesome/free-solid-svg-icons";
 import { livresApi } from "@/api/livres.api";
@@ -15,6 +15,56 @@ import BarcodeScanner from "@/components/shared/BarcodeScanner";
 import type { Emprunt, Exemplaire, Livre, Utilisateur } from "@/types";
 import { useT } from "@/stores/i18n.store";
 import { useAuthStore } from "@/stores/auth.store";
+import { espaceMembreApi } from "@/api/espace-membre.api";
+
+// Fiche rapide adhérent
+function FicheRapideAdherent({ utilisateur }: { utilisateur: Utilisateur }) {
+  const { data: carte } = useQuery({
+    queryKey: ["carte-membre-quick", utilisateur.id],
+    queryFn: () => espaceMembreApi.getCarte(utilisateur.id).then((r) => r.data),
+  });
+  const { data: amendes } = useQuery({
+    queryKey: ["amendes-quick", utilisateur.id],
+    queryFn: () => espaceMembreApi.getAmendes(utilisateur.id).then((r) => r.data),
+  });
+
+  const hasRetard  = (carte?.stats.empruntsEnRetard ?? 0) > 0;
+  const hasAmende  = (amendes?.totalDu ?? 0) > 0;
+  const hasProbleme = hasRetard || hasAmende;
+
+  return (
+    <div className={`rounded-xl border p-4 space-y-3 ${
+      hasProbleme ? "border-danger/30 bg-danger/5" : "border-success/30 bg-success/5"
+    }`}>
+      <div className="flex items-center gap-2">
+        {hasProbleme
+          ? <AlertTriangle size={15} className="text-danger shrink-0" />
+          : <CheckCircle size={15} className="text-success shrink-0" />}
+        <p className={`text-xs font-semibold ${hasProbleme ? "text-danger" : "text-success"}`}>
+          {hasProbleme ? "Attention — situation à régulariser" : "Situation normale"}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { label: "Emprunts en cours", value: carte?.stats.empruntsEnCours ?? "—", danger: false },
+          { label: "En retard",         value: carte?.stats.empruntsEnRetard ?? "—", danger: hasRetard },
+          { label: "Total emprunts",    value: carte?.stats.totalEmprunts ?? "—",    danger: false },
+          { label: "Amendes dues",      value: amendes ? `${amendes.totalDu} FCFA` : "—", danger: hasAmende },
+        ].map((s) => (
+          <div key={s.label} className="rounded-lg bg-white/70 px-3 py-2 text-center">
+            <p className={`text-lg font-bold ${s.danger ? "text-danger" : "text-text-1"}`}>{s.value}</p>
+            <p className="text-[10px] text-text-3">{s.label}</p>
+          </div>
+        ))}
+      </div>
+      {hasAmende && (
+        <p className="text-xs text-danger">
+          Amendes en cours : {(amendes?.amendesEnCours ?? []).map((a) => a.titre).join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const schema = z.object({
   utilisateurId: z.number().int().positive("Utilisateur requis"),
@@ -261,6 +311,9 @@ export default function NouvelEmpruntPage() {
             {formState.errors.utilisateurId && (
               <p className="text-xs text-danger">{formState.errors.utilisateurId.message}</p>
             )}
+
+            {/* Fiche rapide adhérent */}
+            {selectedUser && <FicheRapideAdherent utilisateur={selectedUser} />}
           </div>
         )}
 

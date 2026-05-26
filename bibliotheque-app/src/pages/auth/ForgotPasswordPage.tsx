@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
     mutationFn: authApi.forgotPassword,
     onSuccess: () => {
       setEmailSent(true);
-      toast.success("Email envoyé avec succès !");
+      toast.success("Email envoyé avec succès");
     },
     onError: () => toast.error("Échec de l'envoi de l'email"),
   });

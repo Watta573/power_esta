@@ -93,21 +93,22 @@ public class NotificationApiController {
     return notificationService.getHistoriqueDiffusions(PageRequest.of(page, size))
         .map(d -> {
           var exp = d.getExpediteur();
-          return Map.<String, Object>of(
-              "id", d.getId(),
-              "sujet", d.getSujet(),
-              "message", d.getMessage(),
-              "type", d.getType(),
-              "rolesCibles", d.getRolesCibles(),
-              "nbDestinataires", d.getNbDestinataires(),
-              "dateEnvoi", d.getDateEnvoi() != null ? d.getDateEnvoi().toString() : "",
-              "statut", d.getStatut(),
-              "expediteur", exp != null ? Map.of(
-                  "id", exp.getId(),
-                  "nom", exp.getNom(),
-                  "prenom", exp.getPrenom()
-              ) : Map.of()
-          );
+          java.util.Map<String, Object> result = new java.util.HashMap<>();
+          result.put("id", d.getId());
+          result.put("sujet", d.getSujet());
+          result.put("message", d.getMessage());
+          result.put("type", d.getType());
+          result.put("rolesCibles", d.getRolesCibles());
+          result.put("nbDestinataires", d.getNbDestinataires());
+          result.put("dateEnvoi", d.getDateEnvoi() != null ? d.getDateEnvoi().toString() : "");
+          result.put("dateEnvoiProgramme", d.getDateEnvoiProgramme() != null ? d.getDateEnvoiProgramme().toString() : null);
+          result.put("statut", d.getStatut());
+          result.put("expediteur", exp != null ? Map.of(
+              "id", exp.getId(),
+              "nom", exp.getNom(),
+              "prenom", exp.getPrenom()
+          ) : Map.of());
+          return result;
         });
   }
 }

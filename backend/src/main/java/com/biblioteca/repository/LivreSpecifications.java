@@ -82,7 +82,8 @@ public final class LivreSpecifications {
   public static Specification<Livre> build(String q, String categorie, Long categorieId, String auteur,
       String langue, Integer anneeMin, Integer anneeMax, Boolean disponibleSeulement,
       ExemplaireRepository exemplaireRepository) {
-    return Specification.where(textSearch(q))
+    return Specification.where(actifOnly(true))
+        .and(textSearch(q))
         .and(categorieId(categorieId))
         .and(auteur(auteur))
         .and(langue(langue))

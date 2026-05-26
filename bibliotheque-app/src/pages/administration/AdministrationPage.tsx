@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Shield, Users, Activity, Settings, Download, Plus, Pencil, Trash2, BookOpen, X, Check, ImagePlus, Library } from "lucide-react";
+import { Shield, Users, Activity, Settings, Download, Plus, Pencil, Trash2, BookOpen, X, Check, ImagePlus, Library, Search, ToggleLeft, ToggleRight } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { adminApi, type AuditLog } from "@/api/admin.api";
@@ -8,12 +8,14 @@ import { categoriesApi } from "@/api/categories.api";
 import { type LangueDto } from "@/api/langues.api";
 import { useLangues, useCreateLangue, useUpdateLangue, useDeleteLangue } from "@/hooks/useLangues";
 import { livresApi } from "@/api/livres.api";
+import { permissionsApi } from "@/api/permissions.api";
 import SearchBar from "@/components/shared/SearchBar";
 import { useUiStore } from "@/stores/ui.store";
 import type { Categorie, Livre, Role, Utilisateur } from "@/types";
 import { useNavigate } from "react-router-dom";
 import { useT } from "@/stores/i18n.store";
 import PermissionManager from "@/components/shared/PermissionManager";
+import { usePermissions, useUserPermissions, useAccorderPermission, useRevoquerPermission } from "@/hooks/usePermissions";
 
 type Onglet = "utilisateurs" | "audit" | "catalogue" | "livres" | "parametres";
 
@@ -55,6 +57,313 @@ function exportAuditPDF(logs: AuditLog[]) {
   a.download = `audit-${new Date().toISOString().split("T")[0]}.txt`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Composant Permissions & Paramètres ──────────────────────────────────────
+const ROLE_DEFAULTS: Record<Role, string[]> = {
+  ADMIN:          ["Toutes les permissions"],
+  BIBLIOTHECAIRE: ["LIVRES_VIEW","LIVRES_CREATE","LIVRES_EDIT","EMPRUNTS_VIEW","EMPRUNTS_VIEW_ALL","EMPRUNTS_CREATE","EMPRUNTS_RETURN","EMPRUNTS_EXTEND","RESERVATIONS_VIEW","RESERVATIONS_VIEW_ALL","RESERVATIONS_CREATE","RESERVATIONS_CANCEL","RESERVATIONS_PROCESS","FINANCES_VIEW","ACQUISITIONS_VIEW","ACQUISITIONS_APPROVE","COMMUNICATION_VIEW","COMMUNICATION_SEND","REPORTS_VIEW"],
+  ENSEIGNANT:     ["LIVRES_VIEW","EMPRUNTS_VIEW","EMPRUNTS_HISTORY","RESERVATIONS_VIEW","RESERVATIONS_CREATE","ACQUISITIONS_VIEW","ACQUISITIONS_SUGGEST","COMMUNICATION_VIEW","PROFILE_VIEW","PROFILE_EDIT"],
+  ETUDIANT:       ["LIVRES_VIEW","EMPRUNTS_VIEW","EMPRUNTS_HISTORY","RESERVATIONS_VIEW","RESERVATIONS_CREATE","ACQUISITIONS_VIEW","ACQUISITIONS_SUGGEST","COMMUNICATION_VIEW","PROFILE_VIEW","PROFILE_EDIT"],
+  PUBLIC:         ["LIVRES_VIEW","RESERVATIONS_VIEW","RESERVATIONS_CREATE","COMMUNICATION_VIEW","PROFILE_VIEW","PROFILE_EDIT"],
+};
+
+const MODULE_COLORS: Record<string, string> = {
+  ADMINISTRATION: "bg-red-100 text-red-700",
+  LIVRES:         "bg-blue-100 text-blue-700",
+  EXEMPLAIRES:    "bg-cyan-100 text-cyan-700",
+  EMPRUNTS:       "bg-green-100 text-green-700",
+  RESERVATIONS:   "bg-purple-100 text-purple-700",
+  FINANCES:       "bg-yellow-100 text-yellow-700",
+  ACQUISITIONS:   "bg-orange-100 text-orange-700",
+  COMMUNICATION:  "bg-pink-100 text-pink-700",
+  RAPPORTS:       "bg-indigo-100 text-indigo-700",
+  PROFIL:         "bg-gray-100 text-gray-700",
+  RELANCES:       "bg-rose-100 text-rose-700",
+  SECURITY:       "bg-slate-100 text-slate-700",
+};
+
+function PermissionsParametres({ logoUrl, setLogoUrl, ta, onOpenPermissions }: {
+  logoUrl: string | null;
+  setLogoUrl: (v: string | null) => void;
+  ta: any;
+  onOpenPermissions: (u: Utilisateur) => void;
+}) {
+  const [vue, setVue] = useState<"matrice" | "utilisateur" | "parametres">("matrice");
+  const [roleSelectionne, setRoleSelectionne] = useState<Role>("ETUDIANT");
+  const [searchUser, setSearchUser] = useState("");
+  const [selectedUser, setSelectedUser] = useState<Utilisateur | null>(null);
+  const [moduleFiltre, setModuleFiltre] = useState("TOUS");
+
+  const { data: allPermissions = [] } = usePermissions();
+  const { data: userPerms = [] } = useUserPermissions(selectedUser?.id);
+  const accorder = useAccorderPermission();
+  const revoquer = useRevoquerPermission();
+
+  const { data: usersData } = useQuery({
+    queryKey: ["users-perm-search", searchUser],
+    queryFn: () => utilisateursApi.getAll({ q: searchUser || undefined, size: 8 }).then(r => r.data),
+    enabled: vue === "utilisateur",
+  });
+
+  const modules = ["TOUS", ...Array.from(new Set(allPermissions.map(p => p.module))).sort()];
+
+  const permsFiltrees = allPermissions.filter(p =>
+    moduleFiltre === "TOUS" || p.module === moduleFiltre
+  );
+
+  const grouped = permsFiltrees.reduce<Record<string, typeof allPermissions>>((acc, p) => {
+    if (!acc[p.module]) acc[p.module] = [];
+    acc[p.module].push(p);
+    return acc;
+  }, {});
+
+  const rolePerms = new Set(
+    roleSelectionne === "ADMIN"
+      ? allPermissions.map(p => p.code)
+      : (ROLE_DEFAULTS[roleSelectionne] ?? [])
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Sous-onglets */}
+      <div className="flex gap-1 rounded-lg border border-border bg-white p-1 w-fit">
+        {([
+          { id: "matrice",     label: "Matrice par rôle",       icon: Shield },
+          { id: "utilisateur", label: "Par utilisateur",        icon: Users },
+          { id: "parametres",  label: "Paramètres système",    icon: Settings },
+        ] as const).map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setVue(id)}
+            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              vue === id ? "bg-primary text-white" : "text-text-2 hover:text-text-1"
+            }`}>
+            <Icon size={14} />{label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Vue Matrice par rôle ── */}
+      {vue === "matrice" && (
+        <div className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border bg-surface-2 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Shield size={16} className="text-primary" />
+              <h2 className="font-semibold">Permissions par rôle</h2>
+              <span className="text-xs text-text-3">{allPermissions.length} permissions au total</span>
+            </div>
+            <div className="flex gap-1">
+              {ROLES.map(r => (
+                <button key={r} onClick={() => setRoleSelectionne(r)}
+                  className={`rounded-lg px-3 py-1 text-xs font-medium transition ${
+                    roleSelectionne === r ? "bg-primary text-white" : `${ROLE_COLORS[r]} hover:opacity-80`
+                  }`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Filtre module */}
+          <div className="flex flex-wrap gap-1 border-b border-border px-4 py-2">
+            {modules.map(m => (
+              <button key={m} onClick={() => setModuleFiltre(m)}
+                className={`rounded px-2 py-0.5 text-[11px] font-medium transition ${
+                  moduleFiltre === m ? "bg-primary text-white" : "bg-surface-2 text-text-2 hover:bg-surface"
+                }`}>
+                {m === "TOUS" ? "Tous" : m}
+              </button>
+            ))}
+          </div>
+
+          <div className="max-h-[500px] overflow-y-auto">
+            {Object.entries(grouped).map(([module, perms]) => (
+              <div key={module}>
+                <div className="sticky top-0 flex items-center justify-between border-b border-border bg-surface-2 px-4 py-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${MODULE_COLORS[module] ?? "bg-gray-100 text-gray-600"}`}>
+                    {module}
+                  </span>
+                  <span className="text-xs text-text-3">
+                    {perms.filter(p => rolePerms.has(p.code)).length} / {perms.length} actives pour {roleSelectionne}
+                  </span>
+                </div>
+                {perms.map(p => {
+                  const active = rolePerms.has(p.code);
+                  return (
+                    <div key={p.id} className={`flex items-center gap-3 border-b border-border/40 px-4 py-2.5 ${
+                      active ? "" : "opacity-50"
+                    }`}>
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                        active ? "bg-success/15 text-success" : "bg-surface-2 text-text-3"
+                      }`}>
+                        {active ? <Check size={11} /> : <X size={11} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-text-1">{p.nom}</p>
+                        {p.description && <p className="text-xs text-text-3 truncate">{p.description}</p>}
+                      </div>
+                      <code className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-mono text-text-3">{p.code}</code>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-border bg-surface-2 px-4 py-2">
+            <p className="text-xs text-text-3">
+              Cette matrice est en lecture seule. Pour modifier les permissions d'un utilisateur spécifique, utilisez l'onglet <strong>Par utilisateur</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Vue Par utilisateur ── */}
+      {vue === "utilisateur" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <p className="mb-3 text-sm text-text-2">Recherchez un utilisateur pour consulter et modifier ses permissions individuelles.</p>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
+              <input value={searchUser} onChange={e => setSearchUser(e.target.value)}
+                placeholder="Nom, email, identifiant..."
+                className="h-9 w-full rounded-lg border border-border pl-9 pr-3 text-sm focus:border-primary focus:outline-none" />
+            </div>
+            {searchUser && (
+              <div className="mt-2 rounded-lg border border-border bg-white shadow-sm divide-y divide-border">
+                {(usersData?.content ?? []).length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-text-3">Aucun utilisateur trouvé</p>
+                ) : (usersData?.content ?? []).map((u: Utilisateur) => (
+                  <button key={u.id} onClick={() => { setSelectedUser(u); setSearchUser(""); }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      {u.prenom[0]}{u.nom[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{u.prenom} {u.nom}</p>
+                      <p className="text-xs text-text-3">{u.email}</p>
+                    </div>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[u.role as Role] ?? ""}`}>{u.role}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {selectedUser && (
+            <div className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border bg-surface-2 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                    {selectedUser.prenom[0]}{selectedUser.nom[0]}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-text-1">{selectedUser.prenom} {selectedUser.nom}</p>
+                    <p className="text-xs text-text-3">{selectedUser.email} · <span className={`font-medium ${ROLE_COLORS[selectedUser.role as Role]?.split(" ")[1] ?? ""}`}>{selectedUser.role}</span></p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-3">
+                    <span className="font-semibold text-success">{userPerms.length}</span> permissions actives
+                  </span>
+                  <button onClick={() => onOpenPermissions(selectedUser)}
+                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary-light">
+                    <Shield size={13} /> Gérer en détail
+                  </button>
+                  <button onClick={() => setSelectedUser(null)}
+                    className="rounded-lg border border-border px-2 py-1.5 text-sm text-text-2 hover:bg-surface">
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Aperçu rapide des permissions par module */}
+              <div className="max-h-80 overflow-y-auto divide-y divide-border">
+                {Object.entries(
+                  allPermissions.reduce<Record<string, typeof allPermissions>>((acc, p) => {
+                    if (!acc[p.module]) acc[p.module] = [];
+                    acc[p.module].push(p);
+                    return acc;
+                  }, {})
+                ).map(([module, perms]) => {
+                  const activeCount = perms.filter(p => userPerms.includes(p.code)).length;
+                  return (
+                    <div key={module} className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${MODULE_COLORS[module] ?? "bg-gray-100 text-gray-600"}`}>
+                          {module}
+                        </span>
+                        <span className="text-xs text-text-3">{activeCount}/{perms.length}</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-surface-2">
+                        <div className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${(activeCount / perms.length) * 100}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Vue Paramètres système ── */}
+      {vue === "parametres" && (
+        <div className="space-y-4">
+          {/* Logo */}
+          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+            <h2 className="mb-4 font-semibold">{ta.logoLabel}</h2>
+            <div className="flex items-center gap-4">
+              <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-xl border border-border bg-surface-2">
+                {logoUrl ? <img src={logoUrl} alt="Logo" className="h-full w-full object-cover" /> : <ImagePlus size={24} className="text-text-3" />}
+              </div>
+              <div className="space-y-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/5">
+                  <ImagePlus size={15} />
+                  {logoUrl ? ta.changerLogo : ta.uploaderLogo}
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (!file.type.startsWith("image/")) { toast.error("Seules les images sont acceptées."); return; }
+                    if (file.size > 2 * 1024 * 1024) { toast.error("Image trop lourde. Maximum 2 Mo."); return; }
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const result = ev.target?.result as string;
+                      if (result && /^data:image\/(png|jpeg|jpg|gif|webp);base64,/.test(result)) setLogoUrl(result);
+                      else toast.error("Format non supporté.");
+                    };
+                    reader.readAsDataURL(file);
+                  }} />
+                </label>
+                {logoUrl && (
+                  <button onClick={() => setLogoUrl(null)}
+                    className="flex items-center gap-2 rounded-lg border border-danger px-4 py-2 text-sm text-danger hover:bg-danger/5">
+                    <X size={14} /> {ta.supprimerLogo}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Paramètres établissement */}
+          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+            <h2 className="mb-4 font-semibold">{ta.parametresEtablissement}</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {ta.parametresSysteme.map(({ label, value }: { label: string; value: string }) => (
+                <div key={label} className="space-y-1">
+                  <label className="text-sm font-medium text-text-2">{label}</label>
+                  <input defaultValue={value}
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                </div>
+              ))}
+            </div>
+            <button className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm text-white hover:bg-primary-light">
+              {ta.enregistrerParametres}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AdministrationPage() {
@@ -587,130 +896,12 @@ export default function AdministrationPage() {
 
       {/* ===== PERMISSIONS ===== */}
       {onglet === "parametres" && (
-        <div className="space-y-6">
-          <div className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
-            <div className="bg-surface-2 px-4 py-3 flex items-center gap-2">
-              <Shield size={16} className="text-primary" />
-              <h2 className="font-semibold">{ta.matricePermissions}</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-border">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium text-text-2 w-64">{ta.permission}</th>
-                    {ROLES.map((r) => (
-                      <th key={r} className="px-3 py-3 text-center font-medium">
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${ROLE_COLORS[r]}`}>{r}</span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(ta.permissionsMatrix).map(([section, perms]) => (
-                    <>
-                      <tr key={section} className="bg-surface-2">
-                        <td colSpan={ROLES.length + 1} className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-3">
-                          {section}
-                        </td>
-                      </tr>
-                  {(perms as { label: string; roles: readonly string[] }[]).map((perm) => (
-                        <tr key={perm.label} className="border-b border-border/50 hover:bg-surface">
-                          <td className="px-4 py-2.5 text-text-1">{perm.label}</td>
-                          {ROLES.map((role) => (
-                            <td key={role} className="px-3 py-2.5 text-center">
-                              <input
-                                type="checkbox"
-                                checked={(perm.roles as readonly string[]).includes(role)}
-                                readOnly
-                                className="h-4 w-4 cursor-default accent-primary"
-                                title={(perm.roles as readonly string[]).includes(role) ? "Autorisé" : "Non autorisé"}
-                              />
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="border-t border-border px-4 py-3">
-              <p className="text-xs text-text-3">{ta.permissionsNote}</p>
-            </div>
-          </div>
-
-          {/* Paramètres système */}
-          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-            <h2 className="mb-4 font-semibold">{ta.logoLabel}</h2>
-            <div className="flex items-center gap-4">
-              <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-xl border border-border bg-surface-2">
-                {logoUrl ? (
-                  <img src={logoUrl} alt="Logo" className="h-full w-full object-cover" />
-                ) : (
-                  <ImagePlus size={24} className="text-text-3" />
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/5">
-                  <ImagePlus size={15} />
-                  {logoUrl ? ta.changerLogo : ta.uploaderLogo}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      // Valider : image uniquement, max 2 Mo
-                      if (!file.type.startsWith("image/")) {
-                        toast.error("Fichier invalide. Seules les images sont acceptées.");
-                        return;
-                      }
-                      if (file.size > 2 * 1024 * 1024) {
-                        toast.error("Image trop lourde. Maximum 2 Mo.");
-                        return;
-                      }
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        const result = ev.target?.result as string;
-                        // Vérifier que c'est bien un data URL image (pas de SVG avec scripts)
-                        if (result && /^data:image\/(png|jpeg|jpg|gif|webp);base64,/.test(result)) {
-                          setLogoUrl(result);
-                        } else {
-                          toast.error("Format d'image non supporté.");
-                        }
-                      };
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                </label>
-                {logoUrl && (
-                  <button onClick={() => setLogoUrl(null)}
-                    className="flex items-center gap-2 rounded-lg border border-danger px-4 py-2 text-sm text-danger hover:bg-danger/5">
-                    <X size={14} /> {ta.supprimerLogo}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Paramètres système */}
-          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-            <h2 className="mb-4 font-semibold">{ta.parametresEtablissement}</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {ta.parametresSysteme.map(({ label, value }) => (
-                <div key={label} className="space-y-1">
-                  <label className="text-sm font-medium text-text-2">{label}</label>
-                  <input defaultValue={value}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
-                </div>
-              ))}
-            </div>
-            <button className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm text-white hover:bg-primary-light">
-              {ta.enregistrerParametres}
-            </button>
-          </div>
-        </div>
+        <PermissionsParametres
+          logoUrl={logoUrl}
+          setLogoUrl={setLogoUrl}
+          ta={ta}
+          onOpenPermissions={(u) => setSelectedUserForPermissions(u)}
+        />
       )}
       
       {/* Modal de gestion des permissions */}

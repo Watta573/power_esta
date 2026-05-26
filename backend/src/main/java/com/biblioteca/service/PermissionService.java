@@ -14,10 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class PermissionService {
     
     private final PermissionRepository permissionRepository;
@@ -190,47 +192,75 @@ public class PermissionService {
     );
     
     /**
-     * Vérifie si un utilisateur a une permission spécifique
+     * Vérifie si un utilisateur a une permission spécifique.
+     * Priorité : entrée BDD explicite > permissions par défaut du rôle
      */
+    @Transactional(readOnly = true)
     public boolean hasPermission(Long utilisateurId, String permissionCode) {
-        // 1. Vérifier les permissions par rôle en premier (plus fiable)
+        try {
+            Permission permission = permissionRepository.findByCode(permissionCode).orElse(null);
+            if (permission != null) {
+                Optional<UtilisateurPermission> entree = utilisateurPermissionRepository
+                    .findByUtilisateurIdAndPermissionId(utilisateurId, permission.getId());
+                if (entree.isPresent()) {
+                    // Entrée explicite trouvée : elle prime sur le rôle par défaut
+                    boolean result = Boolean.TRUE.equals(entree.get().getAccorde());
+                    log.debug("[PERM-BDD] user={} perm={} accorde={}", utilisateurId, permissionCode, result);
+                    return result;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Erreur BDD permission {} user {}: {}", permissionCode, utilisateurId, e.getMessage());
+        }
+
+        // Pas d'entrée explicite : fallback sur le rôle par défaut
         Utilisateur utilisateur = utilisateurRepository.findById(utilisateurId).orElse(null);
         if (utilisateur != null) {
             Set<String> rolePermissions = DEFAULT_PERMISSIONS.get(utilisateur.getRole());
-            if (rolePermissions != null && rolePermissions.contains(permissionCode)) {
-                return true;
-            }
+            boolean result = rolePermissions != null && rolePermissions.contains(permissionCode);
+            log.debug("[PERM-ROLE] user={} role={} perm={} granted={}", utilisateurId, utilisateur.getRole(), permissionCode, result);
+            return result;
         }
-        // 2. Vérifier les permissions personnalisées en base
-        try {
-            return utilisateurPermissionRepository.hasPermission(utilisateurId, permissionCode);
-        } catch (Exception e) {
-            return false;
-        }
+        return false;
     }
     
     /**
-     * Obtient toutes les permissions d'un utilisateur (rôle + personnalisées)
+     * Obtient toutes les permissions effectives d'un utilisateur.
+     * Respecte la même priorité : BDD individuelle > rôle par défaut
      */
+    @Transactional(readOnly = true)
     public List<String> getUserPermissions(Long utilisateurId) {
-        List<String> customPermissions;
-        try {
-            customPermissions = utilisateurPermissionRepository.findPermissionCodesByUtilisateurId(utilisateurId);
-        } catch (Exception e) {
-            customPermissions = new java.util.ArrayList<>();
-        }
-
         Utilisateur utilisateur = utilisateurRepository.findById(utilisateurId).orElse(null);
-        if (utilisateur != null) {
-            Set<String> rolePermissions = DEFAULT_PERMISSIONS.get(utilisateur.getRole());
-            if (rolePermissions != null) {
-                List<String> result = new java.util.ArrayList<>(customPermissions);
-                result.addAll(rolePermissions);
-                return result.stream().distinct().toList();
-            }
+
+        // Permissions du rôle par défaut
+        Set<String> rolePerms = utilisateur != null
+            ? DEFAULT_PERMISSIONS.getOrDefault(utilisateur.getRole(), Set.of())
+            : Set.of();
+
+        // Entrées explicites en BDD avec JOIN FETCH (pas de LazyInitializationException)
+        List<UtilisateurPermission> entrees;
+        try {
+            entrees = utilisateurPermissionRepository.findAllByUtilisateurIdWithPermission(utilisateurId);
+        } catch (Exception e) {
+            entrees = new java.util.ArrayList<>();
         }
 
-        return customPermissions.stream().distinct().toList();
+        // Codes accordés et révoqués explicitement
+        Set<String> accordesExplicitement = entrees.stream()
+            .filter(up -> Boolean.TRUE.equals(up.getAccorde()))
+            .map(up -> up.getPermission().getCode())
+            .collect(java.util.stream.Collectors.toSet());
+        Set<String> revoqueesExplicitement = entrees.stream()
+            .filter(up -> Boolean.FALSE.equals(up.getAccorde()))
+            .map(up -> up.getPermission().getCode())
+            .collect(java.util.stream.Collectors.toSet());
+
+        // Résultat = (rôle par défaut - révoquées) + accordées explicitement
+        java.util.Set<String> result = new java.util.HashSet<>(rolePerms);
+        result.removeAll(revoqueesExplicitement);
+        result.addAll(accordesExplicitement);
+
+        return new java.util.ArrayList<>(result);
     }
     
     /**
@@ -274,23 +304,37 @@ public class PermissionService {
     }
     
     /**
-     * Révoque une permission d'un utilisateur
+     * Révoque une permission d'un utilisateur.
+     * Crée une entrée avec accorde=false si elle n'existe pas encore.
      */
     @Transactional
     public void revoquerPermission(Long utilisateurId, String permissionCode, Long revoqueParId, String notes) {
+        Utilisateur utilisateur = utilisateurRepository.findById(utilisateurId)
+            .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
         Permission permission = permissionRepository.findByCode(permissionCode)
             .orElseThrow(() -> new RuntimeException("Permission introuvable"));
-        
+        Utilisateur revoquePar = utilisateurRepository.findById(revoqueParId).orElse(null);
+
         UtilisateurPermission existante = utilisateurPermissionRepository
             .findByUtilisateurIdAndPermissionId(utilisateurId, permission.getId())
             .orElse(null);
-        
+
         if (existante != null) {
             existante.setAccorde(false);
             existante.setDateAccord(LocalDateTime.now());
-            existante.setAccordePar(utilisateurRepository.findById(revoqueParId).orElse(null));
+            existante.setAccordePar(revoquePar);
             existante.setNotes(notes);
             utilisateurPermissionRepository.save(existante);
+        } else {
+            // Créer une entrée explicite de révocation
+            utilisateurPermissionRepository.save(UtilisateurPermission.builder()
+                .utilisateur(utilisateur)
+                .permission(permission)
+                .accorde(false)
+                .dateAccord(LocalDateTime.now())
+                .accordePar(revoquePar)
+                .notes(notes)
+                .build());
         }
     }
     

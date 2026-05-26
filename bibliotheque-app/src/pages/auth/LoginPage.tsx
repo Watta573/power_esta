@@ -36,7 +36,7 @@ export default function LoginPage() {
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-gradient-to-br from-[#d8f3dc] via-white to-[#f3f8f4] lg:grid-cols-2">
-      {/* Section gauche - Branding */}
+      {/* Section gauche, Branding */}
       <section className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-[#f0f7f4] px-12 py-14">
         {/* Cercles décoratifs doux */}
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#1b4332]/6" />
@@ -78,7 +78,7 @@ export default function LoginPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{item.label}</p>
+                  <p className="text-sm font-semibold text-gray-600">{item.label}</p>
                   <p className="text-xs text-gray-400">{item.sub}</p>
                 </div>
               </div>
@@ -87,10 +87,10 @@ export default function LoginPage() {
         </div>
 
         {/* Footer bas */}
-        <p className="relative text-xs text-gray-400">© {new Date().getFullYear()} Bibliothèque ESTA</p>
+        <p className="relative text-xs text-gray-600">© {new Date().getFullYear()} Bibliothèque ESTA</p>
       </section>
 
-      {/* Section droite - Formulaire */}
+      {/* Section droite, Formulaire */}
       <section className="grid place-items-center px-6 py-12">
         <div className="w-full max-w-md">
           {/* Logo mobile */}

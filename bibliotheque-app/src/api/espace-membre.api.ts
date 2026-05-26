@@ -1,7 +1,7 @@
 import { apiClient } from "./client";
 import type { PageResponse } from "@/types";
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types
 
 export interface AvisLivre {
   id: number;
@@ -47,7 +47,7 @@ export interface CarteMembre {
   };
 }
 
-// ── Avis ───────────────────────────────────────────────────────────────────
+// Avis 
 
 export const avisApi = {
   getByLivre: (livreId: number, page = 0, size = 10) =>
@@ -71,7 +71,7 @@ export const avisApi = {
     apiClient.delete(`/avis/admin/${id}`),
 };
 
-// ── Wishlist ───────────────────────────────────────────────────────────────
+// Wishlist 
 
 export const wishlistApi = {
   getMaWishlist: (utilisateurId: number) =>
@@ -87,7 +87,7 @@ export const wishlistApi = {
     apiClient.delete<{ status: string; inWishlist: boolean }>(`/wishlist/${livreId}`, { params: { utilisateurId } }),
 };
 
-// ── Alertes thématiques ────────────────────────────────────────────────────
+// Alertes thématiques
 
 export const alertesApi = {
   getMesAlertes: (utilisateurId: number) =>
@@ -100,7 +100,7 @@ export const alertesApi = {
     apiClient.delete(`/alertes-thematiques/${id}`, { params: { utilisateurId } }),
 };
 
-// ── Listes de lecture ──────────────────────────────────────────────────────
+// Listes de lecture
 
 export const listesLectureApi = {
   getPubliques: (page = 0, size = 10) =>
@@ -161,7 +161,7 @@ export interface StatistiquesPersonnelles {
   nombreRetards: number;
 }
 
-// ── Espace membre ──────────────────────────────────────────────────────────
+// Espace membre
 
 export const espaceMembreApi = {
   getCarte: (utilisateurId: number) =>

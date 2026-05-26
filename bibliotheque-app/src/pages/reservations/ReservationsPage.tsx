@@ -166,9 +166,6 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
                   /* Livre sélectionné — carte récap */
                   <div className="relative rounded-xl border-2 border-primary/20 bg-primary/5 p-4">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <FontAwesomeIcon icon={faBookmark} style={{ fontSize: 16 }} className="text-primary" />
-                      </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-text-1 line-clamp-1">{livreChoisi.titre}</p>
                         <p className="text-sm text-text-2">{livreChoisi.auteur}</p>
@@ -221,9 +218,6 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
                           onClick={() => { setLivreChoisi(l); setSearchLivre(""); }}
                           className="group flex w-full items-center gap-3 border-b border-border/50 px-4 py-3 text-left transition last:border-0 hover:bg-surface"
                         >
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 group-hover:bg-primary/10">
-                            <FontAwesomeIcon icon={faBookmark} style={{ fontSize: 13 }} className="text-text-3 group-hover:text-primary" />
-                          </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium text-text-1">{l.titre}</p>
                             <p className="text-xs text-text-3">{l.auteur}</p>
@@ -246,7 +240,6 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
               <motion.div key="step2" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.15 }} className="space-y-4">
                 {/* Récap livre */}
                 <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">
-                  <FontAwesomeIcon icon={faBookmark} style={{ fontSize: 12 }} className="text-primary" />
                   <span className="truncate text-sm font-medium text-text-1">{livreChoisi?.titre}</span>
                 </div>
 
@@ -295,14 +288,14 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
                             onClick={() => { setUtilisateurId(u.id); setSearchUser(""); }}
                             className="group flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-surface"
                           >
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-bold text-text-2 group-hover:bg-primary/10 group-hover:text-primary">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-xs font-bold text-text-2 group-hover:bg-primary/10 group-hover:text-primary">
                               {u.prenom[0]}{u.nom[0]}
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-text-1">{u.prenom} {u.nom}</p>
                               <p className="text-xs text-text-3">{u.email}</p>
                             </div>
-                            <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-text-3">{u.role}</span>
+                            <span className="shrink-0 rounded-lg bg-surface-2 px-2 py-0.5 text-[11px] text-text-3">{u.role}</span>
                           </button>
                         ))}
                       </div>
@@ -318,7 +311,7 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between border-t border-border px-6 py-4">
           <button
             onClick={() => step === 2 ? setStep(1) : onClose()}
-            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm text-text-2 transition hover:bg-surface"
+            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm text-text-2 transition hover:bg-surface"
           >
             {step === 2 && <FontAwesomeIcon icon={faChevronRight} style={{ fontSize: 11, transform: "rotate(180deg)" }} />}
             {step === 2 ? "Retour" : "Annuler"}
@@ -330,11 +323,11 @@ function NouvelleReservationModal({ onClose }: { onClose: () => void }) {
             style={{ background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-light))" }}
           >
             {creerMutation.isPending ? (
-              <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Enregistrement...</span>
+              <span className="flex items-center gap-2"><span className="h-3.5 w-3.5 animate-spin rounded-lg border-2 border-white/30 border-t-white" /> Enregistrement...</span>
             ) : step === 1 && canManage ? (
               <span className="flex items-center gap-1.5">Suivant <FontAwesomeIcon icon={faChevronRight} style={{ fontSize: 11 }} /></span>
             ) : (
-              <span className="flex items-center gap-1.5"><FontAwesomeIcon icon={faBookmark} style={{ fontSize: 12 }} /> Confirmer la réservation</span>
+              <span className="flex items-center gap-1.5">Confirmer la réservation</span>
             )}
           </button>
         </div>
@@ -455,7 +448,7 @@ export default function ReservationsPage() {
           {["EN_ATTENTE", "DISPONIBLE"].includes(row.original.statut) && (
             (canManage
               ? row.original.utilisateur.id === utilisateur?.id  // staff : seulement les siennes
-              : true                                              // non-staff : déjà filtré par le backend
+              : true                                              // non-staff : déjà filtré par notre backend
             ) && (
             <button
               onClick={() => setConfirmAnnuler({ id: row.original.id, titre: row.original.livre.titre })}
@@ -566,7 +559,7 @@ export default function ReservationsPage() {
 
       {showModal && <NouvelleReservationModal onClose={() => setShowModal(false)} />}
 
-      {/* Dialog confirmation annulation */}
+      {/* Ma boite de Dialogue pour annulation de confirmation */}
       {confirmAnnuler && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
@@ -607,7 +600,7 @@ export default function ReservationsPage() {
         </div>
       )}
 
-      {/* Dialog confirmation suppression */}
+      {/* Dialogue  de confirmation mes suppressions */}
       <ConfirmDialog
         open={!!confirmSupprimer}
         titre={t.reservations.supprimerReservation}

@@ -15,6 +15,7 @@ import CataloguePage         from "@/pages/livres/CataloguePage";
 import LivreDetailPage       from "@/pages/livres/LivreDetailPage";
 import LivreFormPage         from "@/pages/livres/LivreFormPage";
 import EmpruntsPage          from "@/pages/emprunts/EmpruntsPage";
+import PresentationEquipe    from "@/pages/presentation_equipe/presentation_equipe";
 import NouvelEmpruntPage     from "@/pages/emprunts/NouvelEmpruntPage";
 import ReservationsPage      from "@/pages/reservations/ReservationsPage";
 import RelancesPage          from "@/pages/relances/RelancesPage";
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
   { path: "/forgot-password", element: <PublicOnlyRoute><ForgotPasswordPage /></PublicOnlyRoute> },
   { path: "/reset-password",  element: <PublicOnlyRoute><ResetPasswordPage /></PublicOnlyRoute> },
   { path: "/verify-email",    element: <VerifyEmailPage /> },
+  { path: "/presentation-equipe", element: <PresentationEquipe /> },
 
   // Application protégée
   {
@@ -64,7 +66,7 @@ export const router = createBrowserRouter([
       { path: "espace-membre",   element: <EspaceMembrePage /> },
 
       { path: "emprunts",         element: <EmpruntsPage /> },
-      { path: "emprunts/nouveau", element: <NouvelEmpruntPage /> },
+      { path: "emprunts/nouveau", element: <AdminRoute><NouvelEmpruntPage /></AdminRoute> },
 
       { path: "reservations", element: <ReservationsPage /> },
       { path: "periodiques",  element: <PeriodiquesPagE /> },

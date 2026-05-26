@@ -27,4 +27,5 @@ export const ROUTES = {
   fournisseurs: "/fournisseurs",
   profil: "/profil",
   espaceMembre: "/espace-membre",
+  presentationEquipe: "/presentation-equipe",
 } as const;

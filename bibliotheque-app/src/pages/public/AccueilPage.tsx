@@ -226,7 +226,7 @@ export default function AccueilPage() {
                       alt={book.titre || `Couverture ${idx}`}
                       className="h-full w-full object-cover"
                     />
-                    {/* Dimming and Blur for inactive items */}
+                    {/* Assombrissement et flou pour les éléments inactifs */}
                     <motion.div
                       animate={{
                         opacity: isActive ? 0 : 0.6,
@@ -347,8 +347,7 @@ export default function AccueilPage() {
       <footer className="border-t border-gray-200 bg-white px-6 py-8 text-center text-sm text-gray-400">
         <p>© {new Date().getFullYear()} Bibliothèque ESTA. Tous droits réservés</p>
         <div className="mt-2 flex justify-center gap-6">
-          <Link to="/login" className="hover:text-gray-600 transition-colors">Connexion</Link>
-          <Link to="/register" className="hover:text-gray-600 transition-colors">Inscription</Link>
+          <Link to="/presentation-equipe" className="hover:no-underline">Développé par Elvithon Dev & Alpha</Link>
         </div>
       </footer>
     </div>

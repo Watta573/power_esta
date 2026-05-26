@@ -96,30 +96,32 @@ public class EspaceMembreApiController {
       default         -> 5;
     };
 
-    return Map.of(
-        "utilisateur", Map.of(
-            "id", u.getId(),
-            "nom", u.getNom(),
-            "prenom", u.getPrenom(),
-            "identifiant", u.getIdentifiant(),
-            "email", u.getEmail(),
-            "role", u.getRole().name(),
-            "dateInscription", u.getDateInscription().toString(),
-            "actif", u.getActif()
-        ),
-        "stats", Map.of(
-            "empruntsEnCours", empruntsEnCours,
-            "empruntsEnRetard", empruntsRetard,
-            "totalEmprunts", tous.size(),
-            "amendesDues", amendesDues,
-            "membreDepuis", u.getDateInscription().toString(),
-            "anneeEnCours", LocalDate.now().getYear(),
-            "empruntsAnneeEnCours", empruntsAnnee,
-            "quotaMax", quotaMax,
-            "genresPreferes", genresPreferes,
-            "auteursPreferes", auteursPreferes
-        )
-    );
+    Map<String, Object> utilisateurMap = new LinkedHashMap<>();
+    utilisateurMap.put("id", u.getId());
+    utilisateurMap.put("nom", u.getNom());
+    utilisateurMap.put("prenom", u.getPrenom());
+    utilisateurMap.put("identifiant", u.getIdentifiant());
+    utilisateurMap.put("email", u.getEmail());
+    utilisateurMap.put("role", u.getRole().name());
+    utilisateurMap.put("dateInscription", u.getDateInscription().toString());
+    utilisateurMap.put("actif", u.getActif());
+
+    Map<String, Object> statsMap = new LinkedHashMap<>();
+    statsMap.put("empruntsEnCours", empruntsEnCours);
+    statsMap.put("empruntsEnRetard", empruntsRetard);
+    statsMap.put("totalEmprunts", tous.size());
+    statsMap.put("amendesDues", amendesDues);
+    statsMap.put("membreDepuis", u.getDateInscription().toString());
+    statsMap.put("anneeEnCours", LocalDate.now().getYear());
+    statsMap.put("empruntsAnneeEnCours", empruntsAnnee);
+    statsMap.put("quotaMax", quotaMax);
+    statsMap.put("genresPreferes", genresPreferes);
+    statsMap.put("auteursPreferes", auteursPreferes);
+
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("utilisateur", utilisateurMap);
+    result.put("stats", statsMap);
+    return result;
   }
 
   // ── Historique complet des emprunts ──────────────────────────────────────

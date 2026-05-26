@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { livresApi } from "@/api/livres.api";
 import type { ExemplaireCreatePayload } from "@/api/livres.api";
@@ -7,7 +7,8 @@ import { reservationsApi } from "@/api/reservations.api";
 import { useAuthStore } from "@/stores/auth.store";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faBookOpen, faPencil, faPrint, faTrash, faPlus, faCheck, faXmark, faHistory, faHeart } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faBookOpen, faPencil, faPrint, faTrash, faPlus, faCheck, faXmark, faHistory, faHeart, faStar } from "@fortawesome/free-solid-svg-icons";
+import { faStar as faStarEmpty } from "@fortawesome/free-regular-svg-icons";
 import { toast } from "sonner";
 import { useState } from "react";
 import { couvertureUrl } from "@/lib/imageUrl";
@@ -16,7 +17,7 @@ import { useExportConfirm } from "@/hooks/useExportConfirm";
 import ExportConfirmModal from "@/components/shared/ExportConfirmModal";
 import type { EtatExemplaire, Exemplaire } from "@/types";
 import { useT } from "@/stores/i18n.store";
-import { useWishlistCheck, useToggleWishlist } from "@/hooks/useEspaceMembre";
+import { useWishlistCheck, useToggleWishlist, useAvisLivre, useMonAvis, useSoumettreAvis, useSupprimerAvis } from "@/hooks/useEspaceMembre";
 
 const ETATS: EtatExemplaire[] = ["BON", "ABIME", "PERDU", "RETIRE"];
 
@@ -156,6 +157,141 @@ export default function LivreDetailPage() {
   const disponible = livre.nombreDisponibles > 0;
   const premierExemplaire = (exemplaires ?? []).find((e) => e.disponible);
 
+  // Composant avis inline
+  function SectionAvis() {
+    const canAvis = useAuthStore((s) => s.hasRole(["ETUDIANT", "ENSEIGNANT", "PUBLIC"]));
+    const uid = utilisateur?.id;
+    const [avisPage, setAvisPage] = useState(0);
+    const [noteForm, setNoteForm] = useState(0);
+    const [commentaireForm, setCommentaireForm] = useState("");
+    const [showForm, setShowForm] = useState(false);
+    const { data: avisData } = useAvisLivre(livreId, avisPage);
+    const { data: monAvis } = useMonAvis(uid, livreId);
+    const soumettre = useSoumettreAvis();
+    const supprimer = useSupprimerAvis();
+
+    const moyenne = avisData?.moyenne ?? 0;
+    const total   = avisData?.total ?? 0;
+
+    function Etoiles({ note, interactive, onChange }: { note: number; interactive?: boolean; onChange?: (n: number) => void }) {
+      return (
+        <div className="flex gap-0.5">
+          {[1,2,3,4,5].map((i) => (
+            <button key={i} type="button"
+              onClick={() => interactive && onChange?.(i)}
+              className={interactive ? "cursor-pointer" : "cursor-default pointer-events-none"}
+            >
+              <FontAwesomeIcon
+                icon={i <= note ? faStar : faStarEmpty}
+                style={{ fontSize: 14 }}
+                className={i <= note ? "text-yellow-400" : "text-text-3"}
+              />
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="font-semibold">Avis des lecteurs</h2>
+            {total > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Etoiles note={Math.round(moyenne)} />
+                <span className="text-sm font-semibold text-text-1">{moyenne.toFixed(1)}</span>
+                <span className="text-xs text-text-3">({total} avis)</span>
+              </div>
+            )}
+          </div>
+          {canAvis && !monAvis?.existe && (
+            <button onClick={() => setShowForm((v) => !v)}
+              className="rounded-lg border border-primary px-3 py-1.5 text-sm text-primary hover:bg-primary/5">
+              {showForm ? "Annuler" : "Donner mon avis"}
+            </button>
+          )}
+        </div>
+
+        {/* Formulaire avis */}
+        {canAvis && showForm && !monAvis?.existe && (
+          <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-text-2">Note</label>
+              <Etoiles note={noteForm} interactive onChange={setNoteForm} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-text-2">Commentaire (optionnel)</label>
+              <textarea rows={2} value={commentaireForm} onChange={(e) => setCommentaireForm(e.target.value)}
+                placeholder="Votre avis sur ce livre..."
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+            </div>
+            <button
+              disabled={noteForm === 0 || soumettre.isPending}
+              onClick={() => soumettre.mutate({ livreId, utilisateurId: uid!, note: noteForm, commentaire: commentaireForm || undefined }, {
+                onSuccess: () => { setShowForm(false); setNoteForm(0); setCommentaireForm(""); }
+              })}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              {soumettre.isPending ? "Envoi..." : "Publier mon avis"}
+            </button>
+          </div>
+        )}
+
+        {/* Mon avis existant */}
+        {canAvis && monAvis?.existe && monAvis.avis && (
+          <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-primary">Mon avis</p>
+                <Etoiles note={monAvis.avis.note} />
+                {monAvis.avis.commentaire && <p className="text-sm text-text-1">{monAvis.avis.commentaire}</p>}
+                <p className="text-xs text-text-3">{new Date(monAvis.avis.dateAvis).toLocaleDateString("fr-FR")}</p>
+              </div>
+              <button onClick={() => supprimer.mutate({ livreId, utilisateurId: uid! })}
+                className="text-xs text-danger hover:underline">Supprimer</button>
+            </div>
+          </div>
+        )}
+
+        {/* Liste des avis */}
+        {(avisData?.avis.content ?? []).length === 0 ? (
+          <p className="rounded-xl border border-border bg-white px-4 py-6 text-center text-sm text-text-3">
+            Aucun avis pour ce livre. Soyez le premier !
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {(avisData?.avis.content ?? []).map((a) => (
+              <div key={a.id} className="rounded-xl border border-border bg-white p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      {a.utilisateur.prenom[0]}{a.utilisateur.nom[0]}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{a.utilisateur.prenom} {a.utilisateur.nom}</p>
+                      <p className="text-xs text-text-3">{new Date(a.dateAvis).toLocaleDateString("fr-FR")}</p>
+                    </div>
+                  </div>
+                  <Etoiles note={a.note} />
+                </div>
+                {a.commentaire && <p className="mt-2 text-sm text-text-2">{a.commentaire}</p>}
+              </div>
+            ))}
+            {(avisData?.avis.totalPages ?? 0) > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <button onClick={() => setAvisPage((p) => Math.max(0, p - 1))} disabled={avisPage === 0}
+                  className="rounded border border-border px-3 py-1 text-sm disabled:opacity-40">Précédent</button>
+                <span className="text-xs text-text-3">{avisPage + 1} / {avisData?.avis.totalPages}</span>
+                <button onClick={() => setAvisPage((p) => p + 1)} disabled={avisPage >= (avisData?.avis.totalPages ?? 1) - 1}
+                  className="rounded border border-border px-3 py-1 text-sm disabled:opacity-40">Suivant</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between">
@@ -236,11 +372,11 @@ export default function LivreDetailPage() {
               </button>
             ) : disponible ? (
               <button
-                onClick={() => premierExemplaire && empruntMutation.mutate(premierExemplaire.id)}
-                disabled={empruntMutation.isPending || !premierExemplaire}
+                onClick={() => reservationMutation.mutate()}
+                disabled={reservationMutation.isPending}
                 className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white hover:bg-primary-light disabled:opacity-50"
               >
-                {empruntMutation.isPending ? tl.enCours : tl.emprunter}
+                {reservationMutation.isPending ? tl.enCours : tl.reserver}
               </button>
             ) : (
               <button
@@ -457,6 +593,9 @@ export default function LivreDetailPage() {
           )}
         </div>
       </div>
+      {/* Section avis */}
+      <SectionAvis />
+
       {pending && (
         <ExportConfirmModal
           type={pending.type}
